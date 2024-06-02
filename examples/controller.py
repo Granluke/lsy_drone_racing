@@ -114,20 +114,20 @@ class Controller(BaseController):
         waypoints.append([gates[2][0], gates[2][1] + 0.2, z_high + 0.2])
         waypoints.append([gates[3][0], gates[3][1] + 0.1, z_high])
         waypoints.append([gates[3][0], gates[3][1] - 0.1, z_high + 0.1])
-        waypoints.append(
-            [
-                initial_info["x_reference"][0],
-                initial_info["x_reference"][2],
-                initial_info["x_reference"][4],
-            ]
-        )
-        waypoints.append(
-            [
-                initial_info["x_reference"][0],
-                initial_info["x_reference"][2] - 0.2,
-                initial_info["x_reference"][4],
-            ]
-        )
+        # waypoints.append(
+        #     [
+        #         initial_info["x_reference"][0],
+        #         initial_info["x_reference"][2],
+        #         initial_info["x_reference"][4],
+        #     ]
+        # )
+        # waypoints.append(
+        #     [
+        #         initial_info["x_reference"][0],
+        #         initial_info["x_reference"][2] - 0.2,
+        #         initial_info["x_reference"][4],
+        #     ]
+        # )
         waypoints = np.array(waypoints)
 
         tck, u = interpolate.splprep([waypoints[:, 0], waypoints[:, 1], waypoints[:, 2]], s=0.1)

@@ -121,6 +121,7 @@ def simulate(
             # action is not applied in env.step()
             apply_sim_command(env, command_type, args)
             obs, reward, done, info, action = env.step(curr_time, action)
+            print("obs: ", obs)
             # Update the controller internal state and models.
             ctrl.step_learn(action, obs, reward, done, info)
             # Add up reward, collisions, violations.
