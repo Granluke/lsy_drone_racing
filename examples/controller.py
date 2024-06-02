@@ -27,8 +27,10 @@ Tips:
 
 from __future__ import annotations  # Python 3.10 type hints
 
+from copy import deepcopy
 import numpy as np
 from scipy import interpolate
+from stable_baselines3 import PPO
 
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
@@ -144,6 +146,7 @@ class Controller(BaseController):
         self._take_off = False
         self._setpoint_land = False
         self._land = False
+        self.agent = PPO.load("ppo_drone_racing.zip")
         #########################
         # REPLACE THIS (END) ####
         #########################
@@ -190,13 +193,16 @@ class Controller(BaseController):
         else:
             step = iteration - 2 * self.CTRL_FREQ  # Account for 2s delay due to takeoff
             if ep_time - 2 > 0 and step < len(self.ref_x):
-                target_pos = np.array([self.ref_x[step], self.ref_y[step], self.ref_z[step]])
-                target_vel = np.zeros(3)
-                target_acc = np.zeros(3)
-                target_yaw = 0.0
-                target_rpy_rates = np.zeros(3)
+                # target_pos = np.array([self.ref_x[step], self.ref_y[step], self.ref_z[step]])
+                # target_vel = np.zeros(3)
+                # target_acc = np.zeros(3)
+                # target_yaw = 0.0
+                # target_rpy_rates = np.zeros(3)
                 command_type = Command.FULLSTATE
-                args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
+                # args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
+                action, _states = self.agent.predict(observation=obs)
+                target_pos = np.float64(action[:-1])
+                args = [target_pos, np.zeros(3), np.zeros(3), action[-1], np.zeros(3), ep_time]
             # Notify set point stop has to be called every time we transition from low-level
             # commands to high-level ones. Prepares for landing
             elif step >= len(self.ref_x) and not self._setpoint_land:
