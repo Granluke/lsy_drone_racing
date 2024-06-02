@@ -65,7 +65,7 @@ def main(config: str = "config/getting_started.yaml", gui: bool = False):
     check_env(env)  # Sanity check to ensure the environment conforms to the sb3 API
     if True:
         model = PPO("MlpPolicy", env, verbose=1, n_epochs=40)
-        model.learn(total_timesteps=4096)
+        model.learn(total_timesteps=4096,progress_bar=True)
         model.save("ppo_drone_racing")
 
 def create_waypoints(quadrotor_config: dict):

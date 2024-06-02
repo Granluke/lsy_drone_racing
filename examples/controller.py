@@ -201,7 +201,7 @@ class Controller(BaseController):
                 command_type = Command.FULLSTATE
                 # args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
                 action, _states = self.agent.predict(observation=obs)
-                target_pos = np.float64(action[:-1])
+                target_pos = np.float64(action[:-1]) + obs[:3]
                 args = [target_pos, np.zeros(3), np.zeros(3), action[-1], np.zeros(3), ep_time]
             # Notify set point stop has to be called every time we transition from low-level
             # commands to high-level ones. Prepares for landing
