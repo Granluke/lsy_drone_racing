@@ -10,12 +10,19 @@ from copy import deepcopy
 import logging
 from functools import partial
 from pathlib import Path
+import time
 
 import numpy as np
 import fire
 from safe_control_gym.utils.registration import make
+
 from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
+from stable_baselines3.common.env_util import make_vec_env
+from stable_baselines3.common.results_plotter import load_results, ts2xy, plot_results
 from stable_baselines3.common.env_checker import check_env
+from stable_baselines3.common.evaluation import evaluate_policy
+
 from scipy import interpolate
 
 from lsy_drone_racing.constants import FIRMWARE_FREQ
@@ -26,6 +33,8 @@ logger = logging.getLogger(__name__)
 
 
 def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
+    """Utility function for multiprocessed env."""
+    
     """Create the drone racing environment."""
     # Load configuration and check if firmare should be used.
     config = load_config(config_path)
@@ -46,27 +55,51 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     # x,dx,y,dy,z,dz,phi,theta,psi,p,q,r
     # We need to define something for the missing states since we only have x,y,z
     # Obey the order of the states
-    #TODO:
     return DroneRacingWrapper(firmware_env, terminate_on_lap=True)
 
 
-def main(config: str = "config/getting_started.yaml", gui: bool = False):
+def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     """Create the environment, check its compatibility with sb3, and run a PPO agent."""
+    
     logging.basicConfig(level=logging.INFO)
     config_path = Path(__file__).resolve().parents[1] / config # resolve() returns the absolute path, parents[1] /config adds the config
-    env = create_race_env(config_path=config_path, gui=gui)
-    ## Get initial state and info
-    # obs, info = env.reset()
-    ## Load the controller module
-    # controller = "examples/controller.py"
-    # ctrl_path = Path(__file__).parents[1] / controller
-    # ctrl_class = load_controller(ctrl_path)
-    # ctrl = ctrl_class(obs, info)
-    check_env(env)  # Sanity check to ensure the environment conforms to the sb3 API
-    if True:
-        model = PPO("MlpPolicy", env, verbose=1, n_epochs=40)
-        model.learn(total_timesteps=4096,progress_bar=True)
-        model.save("ppo_drone_racing")
+    PROCESSES_TO_TEST = 1
+    NUM_EXPERIMENTS = 1  # RL algorithms can often be unstable, so we run several experiments (see https://arxiv.org/abs/1709.06560)
+    TRAIN_STEPS = 1000
+    # Number of episodes for evaluation
+    EVAL_EPS = 5
+    ALGO = PPO
+    if_validate = False
+    reward_averages = []
+    reward_std = []
+    training_times = []
+    train_env = create_race_env(config_path=config_path, gui=gui)
+    check_env(train_env)
+    vec_train_env = make_vec_env(lambda: create_race_env(config_path=config_path, gui=gui), n_envs=PROCESSES_TO_TEST)
+    # check_env(vec_train_env)
+    train_env = vec_train_env
+    eval_env = create_race_env(config_path=config_path, gui=gui)
+    check_env(eval_env)
+    rewards = []
+    times = []
+    for experiment in range(NUM_EXPERIMENTS):
+        # it is recommended to run several experiments due to variability in results
+        train_env.reset()
+        model = ALGO("MlpPolicy", train_env, verbose=1, tensorboard_log="./logs", n_steps=TRAIN_STEPS,
+                     learning_rate=0.0001, batch_size=TRAIN_STEPS*PROCESSES_TO_TEST, ent_coef=0.1, device='auto', n_epochs=10)
+        start = time.time()
+        model.learn(total_timesteps=TRAIN_STEPS, progress_bar=True, tb_log_name='./logs')
+        times.append(time.time() - start)
+        if if_validate:
+            mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=EVAL_EPS)
+            rewards.append(mean_reward)
+    model.save("ppo_drone_racing")
+    train_env.close()
+    eval_env.close()
+    if if_validate:
+        reward_averages.append(np.mean(rewards))
+        reward_std.append(np.std(rewards))
+        training_times.append(np.mean(times))
 
 def create_waypoints(quadrotor_config: dict):
     CTRL_FREQ = quadrotor_config["ctrl_freq"]
@@ -120,5 +153,7 @@ def create_waypoints(quadrotor_config: dict):
     x_goal[:,2] = ref_y
     x_goal[:,4] = ref_z
     return x_goal
+
+
 if __name__ == "__main__":
     fire.Fire(main)
