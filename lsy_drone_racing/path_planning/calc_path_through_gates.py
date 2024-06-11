@@ -14,7 +14,7 @@ def create_gate(x, y, yaw, gate_type):
         height = 0.525
     
     edge_length = 0.45
-    z_bottom = height 
+    z_bottom = height - 0.45/2 
     z_top = height + 0.45/2
     
     # Define the square in the XZ plane
@@ -208,52 +208,79 @@ def plot_gates_and_cylinders(gates, cylinders, path, before_after_points, go_aro
     plt.legend()
     plt.show()
 
-def check_path_collision(path, cylinders, buffer=0.2):
+def check_path_collision(path, cylinders, buffer=0.15):
+    height = obstacle_dimensions['height']
+    radius = obstacle_dimensions['radius']
+    radius = radius + buffer
     for cylinder in cylinders:
         x_c, y_c, z_c, _, _, _ = cylinder
-        height = obstacle_dimensions['height']
-        radius = obstacle_dimensions['radius']
-        radius = radius + buffer
         for p in path.T:
             x, y, z = p
             if (x - x_c) ** 2 + (y - y_c) ** 2 <= radius ** 2 and 0 <= z <= height:
+                print(f"Collision at {x}, {y}, {z}")
                 return True
     return False
 
-def adjust_waypoints(waypoints, cylinders):
-    buffer = 0.2
+def adjust_waypoints(waypoints, cylinders, buffer=0.1):
+    extra_buffer = 0.2
     adjusted_waypoints = []
+    height = obstacle_dimensions['height']
+    radius = obstacle_dimensions['radius']
+    radius = radius + buffer
     for waypoint in waypoints:
         x, y, z = waypoint
         collision = False
         for cylinder in cylinders:
             x_c, y_c, z_c, _, _, _ = cylinder
-            height = obstacle_dimensions['height']
-            radius = obstacle_dimensions['radius']
-            radius = radius + buffer
             if (x - x_c) ** 2 + (y - y_c) ** 2 <= radius ** 2 and 0 <= z <= height:
                 collision = True
+                print(f"Collision at {x}, {y}, {z}")
                 # Adjust the waypoint by moving it away from the cylinder
                 angle = np.arctan2(y - y_c, x - x_c)
-                x += np.cos(angle) * buffer
-                y += np.sin(angle) * buffer
+                x += np.cos(angle) * extra_buffer
+                y += np.sin(angle) * extra_buffer
+                print(f"Adjusted to {x}, {y}, {z}")
         adjusted_waypoints.append([x, y, z])
     return np.array(adjusted_waypoints)
 
-def calc_best_path(gates, cylinders, start_point, plot=True):
+def adjust_path(path, cylinders, buffer=0.1):
+    extra_buffer = 0.05
+    adjusted_path = [[], [], []]
+    height = obstacle_dimensions['height']
+    radius = obstacle_dimensions['radius']
+    radius = radius + buffer
+    r_squared = radius ** 2
+    for x, y, z in zip(*path):
+        collision = False
+        for cylinder in cylinders:
+            x_c, y_c, z_c, _, _, _ = cylinder
+            distance_calc = (x - x_c) ** 2 + (y - y_c) ** 2
+            if distance_calc <= r_squared and 0 <= z <= height:
+                collision = True
+                # Adjust the point by moving it away from the cylinder
+                angle = np.arctan2(y - y_c, x - x_c)
+                x += np.cos(angle) * extra_buffer * (r_squared / distance_calc)
+                y += np.sin(angle) * extra_buffer * (r_squared / distance_calc)
+        adjusted_path[0].append(x)
+        adjusted_path[1].append(y)
+        adjusted_path[2].append(z)
+    
+    return np.array(adjusted_path)
+
+def calc_best_path(gates, cylinders, start_point, t, plot=True):
     waypoints, before_after_points, go_around_points, intersection_points = create_waypoints(gates, start_point)
-    waypoints = adjust_waypoints(waypoints, cylinders)
     tck, u = splprep(waypoints.T, s=0.1)
-    unew = np.linspace(0, 1, 1000)
-    path = splev(unew, tck)
+    
+    path = splev(t, tck)
     if check_path_collision(np.array(path), cylinders):
         print("Path collides with obstacles, adjusting waypoints...")
-        waypoints = adjust_waypoints(waypoints, cylinders)
-        tck, u = splprep(waypoints.T, s=0.1)
+        path = adjust_path(path, cylinders)
+        # recompute splprep and path with splev
+        tck, u = splprep(path, s=0.1)
+        path = splev(t, tck)
     if plot:
-        path = splev(unew, tck)
         plot_gates_and_cylinders(gates, cylinders, path, before_after_points, go_around_points, intersection_points)
-    return waypoints, tck
+    return path
 
 
 
@@ -271,9 +298,11 @@ OBSTACLES = [
     [-0.5, 0, 0, 0, 0, 0],
     [0, 1.0, 0, 0, 0, 0]
 ]
-
+duration = 10
+CTRL_FREQ = 30
+t = np.linspace(0, 1, int(duration * CTRL_FREQ))
 
 initial_obs = [0.0, 0.0, 0.0]  # Example starting position
 START_POINT = [initial_obs[0], initial_obs[1], 0.3]
 
-calc_best_path(GATES, OBSTACLES, START_POINT, plot=True)
+calc_best_path(GATES, OBSTACLES, START_POINT, t, plot=True)
