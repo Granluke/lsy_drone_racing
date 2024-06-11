@@ -247,8 +247,8 @@ def adjust_waypoints(waypoints, cylinders, buffer=0.1):
         adjusted_waypoints.append([x, y, z])
     return np.array(adjusted_waypoints)
 
-def adjust_path(path, cylinders, buffer=0.1):
-    extra_buffer = 0.05
+def adjust_path(path, cylinders, buffer=0.15):
+    extra_buffer = 0.3
     adjusted_path = [[], [], []]
     height = obstacle_dimensions['height']
     radius = obstacle_dimensions['radius']
@@ -263,8 +263,11 @@ def adjust_path(path, cylinders, buffer=0.1):
                 collision = True
                 # Adjust the point by moving it away from the cylinder
                 angle = np.arctan2(y - y_c, x - x_c)
-                x += np.cos(angle) * extra_buffer * (r_squared / distance_calc)
-                y += np.sin(angle) * extra_buffer * (r_squared / distance_calc)
+                distance = np.sqrt(distance_calc)
+                # Apply a quadratic adjustment factor
+                adjustment_factor = np.clip(((radius - distance) / radius) ** 2, 0, 1)
+                x += np.cos(angle) * extra_buffer * adjustment_factor
+                y += np.sin(angle) * extra_buffer * adjustment_factor
         adjusted_path[0].append(x)
         adjusted_path[1].append(y)
         adjusted_path[2].append(z)
@@ -286,12 +289,10 @@ def calc_best_path(gates, cylinders, start_point, t, plot=True):
         path3 = splev(t, tck)
         path = path3
 
-    print(plot, "Plotting...")
     if plot:
         plot_gates_and_cylinders(gates, cylinders, path1, path, waypoints, before_after_points, go_around_points, intersection_points)
 
-    print(path)
-    print(type(path))
+
     return path, waypoints
 
 
