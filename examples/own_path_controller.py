@@ -85,7 +85,7 @@ class Controller(BaseController):
         # all. It is meant solely as an example on how the drones can be controlled
         start_point = [self.initial_obs[0], self.initial_obs[2], 0.3] 
         gates = self.NOMINAL_GATES
-        duration = 10  # seconds
+        duration = 9  # seconds
         t = np.linspace(0, 1, int(duration * self.CTRL_FREQ))
 
         path, waypoints = calc_best_path(gates, self.NOMINAL_OBSTACLES, start_point, t=t, plot=True)
