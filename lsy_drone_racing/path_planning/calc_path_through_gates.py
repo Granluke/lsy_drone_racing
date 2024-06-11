@@ -150,7 +150,7 @@ def create_waypoints(gates, start_point):
 
     return np.array(waypoints), before_after_points, go_around_points, intersection_points
 
-def plot_gates_and_cylinders(gates, cylinders, path, before_after_points, go_around_points, intersection_points):
+def plot_gates_and_cylinders(gates, cylinders, path_before_obstacle_avoidance, path_after_obstacle_avoidance, waypoints, before_after_points, go_around_points, intersection_points):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
@@ -202,8 +202,12 @@ def plot_gates_and_cylinders(gates, cylinders, path, before_after_points, go_aro
     ax.set_zlim([all_points[:, 2].min() - 1, all_points[:, 2].max() + 1])
 
     # Plot the path
-    ax.plot(path[0], path[1], path[2], 'g', label='Path')
-    ax.scatter(path[0], path[1], path[2], color='r')  # Waypoints
+    ax.plot(path_before_obstacle_avoidance[0], path_before_obstacle_avoidance[1], path_before_obstacle_avoidance[2], 'g', label='Path')
+    ax.plot(path_after_obstacle_avoidance[0], path_after_obstacle_avoidance[1], path_after_obstacle_avoidance[2], 'r', label='Path')
+    
+    # Plot waypoints
+    for wp in waypoints:
+        ax.scatter(*wp, color='black', s=50)
 
     plt.legend()
     plt.show()
@@ -268,19 +272,27 @@ def adjust_path(path, cylinders, buffer=0.1):
     return np.array(adjusted_path)
 
 def calc_best_path(gates, cylinders, start_point, t, plot=True):
+    print("Starting point", start_point)
     waypoints, before_after_points, go_around_points, intersection_points = create_waypoints(gates, start_point)
     tck, u = splprep(waypoints.T, s=0.1)
     
-    path = splev(t, tck)
+    path1 = splev(t, tck)
+    path = path1
     if check_path_collision(np.array(path), cylinders):
         print("Path collides with obstacles, adjusting waypoints...")
         path = adjust_path(path, cylinders)
         # recompute splprep and path with splev
         tck, u = splprep(path, s=0.1)
-        path = splev(t, tck)
+        path3 = splev(t, tck)
+        path = path3
+
+    print(plot, "Plotting...")
     if plot:
-        plot_gates_and_cylinders(gates, cylinders, path, before_after_points, go_around_points, intersection_points)
-    return path
+        plot_gates_and_cylinders(gates, cylinders, path1, path, waypoints, before_after_points, go_around_points, intersection_points)
+
+    print(path)
+    print(type(path))
+    return path, waypoints
 
 
 
@@ -300,9 +312,8 @@ OBSTACLES = [
 ]
 duration = 10
 CTRL_FREQ = 30
-t = np.linspace(0, 1, int(duration * CTRL_FREQ))
+T = np.linspace(0, 1, int(duration * CTRL_FREQ))
 
-initial_obs = [0.0, 0.0, 0.0]  # Example starting position
-START_POINT = [initial_obs[0], initial_obs[1], 0.3]
+START_POINT = [0.9339007658017658, 0.9934538571454128, 0.3]
 
-calc_best_path(GATES, OBSTACLES, START_POINT, t, plot=True)
+#calc_best_path(GATES, OBSTACLES, START_POINT, T, plot=True)

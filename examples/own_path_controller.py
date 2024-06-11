@@ -83,16 +83,15 @@ class Controller(BaseController):
         # Example: Hard-code waypoints through the gates. Obviously this is a crude way of
         # completing the challenge that is highly susceptible to noise and does not generalize at
         # all. It is meant solely as an example on how the drones can be controlled
-        waypoints = []
         start_point = [self.initial_obs[0], self.initial_obs[2], 0.3] 
-        print(initial_obs)
         gates = self.NOMINAL_GATES
         duration = 10  # seconds
         t = np.linspace(0, 1, int(duration * self.CTRL_FREQ))
 
-        path = calc_best_path(gates, self.NOMINAL_OBSTACLES, start_point, t=t, plot=False)
-        
-        self.ref_x, self.ref_y, self.ref_z = path[:, 0], path[:, 1], path[:, 2]
+        path, waypoints = calc_best_path(gates, self.NOMINAL_OBSTACLES, start_point, t=t, plot=True)
+        self.waypoints = waypoints
+        # convert path resulted from splev to x,y,z points
+        self.ref_x, self.ref_y, self.ref_z = path
         assert max(self.ref_z) < 2.5, "Drone must stay below the ceiling"
 
         if self.VERBOSE:
