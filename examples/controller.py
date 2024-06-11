@@ -85,6 +85,7 @@ class Controller(BaseController):
         # all. It is meant solely as an example on how the drones can be controlled
         waypoints = []
         waypoints.append([self.initial_obs[0], self.initial_obs[2], 0.3])
+        print(initial_obs)
         gates = self.NOMINAL_GATES
         z_low = initial_info["gate_dimensions"]["low"]["height"]
         z_high = initial_info["gate_dimensions"]["tall"]["height"]
