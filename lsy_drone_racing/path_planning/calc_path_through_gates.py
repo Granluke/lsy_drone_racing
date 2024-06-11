@@ -212,7 +212,7 @@ def plot_gates_and_cylinders(gates, cylinders, path_before_obstacle_avoidance, p
     plt.legend()
     plt.show()
 
-def check_path_collision(path, cylinders, buffer=0.15):
+def check_path_collision(path, cylinders, buffer=0.25):
     height = obstacle_dimensions['height']
     radius = obstacle_dimensions['radius']
     radius = radius + buffer
@@ -225,7 +225,7 @@ def check_path_collision(path, cylinders, buffer=0.15):
                 return True
     return False
 
-def adjust_waypoints(waypoints, cylinders, buffer=0.1):
+def adjust_waypoints(waypoints, cylinders, buffer=0.25):
     extra_buffer = 0.2
     adjusted_waypoints = []
     height = obstacle_dimensions['height']
@@ -247,8 +247,8 @@ def adjust_waypoints(waypoints, cylinders, buffer=0.1):
         adjusted_waypoints.append([x, y, z])
     return np.array(adjusted_waypoints)
 
-def adjust_path(path, cylinders, buffer=0.15):
-    extra_buffer = 0.3
+def adjust_path(path, cylinders, buffer=0.25):
+    extra_buffer = 0.42
     adjusted_path = [[], [], []]
     height = obstacle_dimensions['height']
     radius = obstacle_dimensions['radius']
@@ -277,7 +277,7 @@ def adjust_path(path, cylinders, buffer=0.15):
 def calc_best_path(gates, cylinders, start_point, t, plot=True):
     print("Starting point", start_point)
     waypoints, before_after_points, go_around_points, intersection_points = create_waypoints(gates, start_point)
-    tck, u = splprep(waypoints.T, s=0.1)
+    tck, u = splprep(waypoints.T, s=0)
     
     path1 = splev(t, tck)
     path = path1
@@ -285,7 +285,7 @@ def calc_best_path(gates, cylinders, start_point, t, plot=True):
         print("Path collides with obstacles, adjusting waypoints...")
         path = adjust_path(path, cylinders)
         # recompute splprep and path with splev
-        tck, u = splprep(path, s=0.1)
+        tck, u = splprep(path, s=0)
         path3 = splev(t, tck)
         path = path3
 
