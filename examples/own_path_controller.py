@@ -49,8 +49,8 @@ def create_gate(x, y, yaw, gate_type):
         height = 0.525
     
     edge_length = 0.45
-    z_bottom = height - 0.45
-    z_top = height
+    z_bottom = height 
+    z_top = height + 0.45/2
     
     # Define the square in the XZ plane
     points = np.array([
@@ -87,7 +87,7 @@ def create_cylinder(x, y, z, height, radius):
 
 def point_in_gate(point, gate_center, yaw, height, buffer):
     gate_width = 0.45 + 2 * buffer
-    gate_height = height + 2 * buffer
+    gate_height = height + 0.45 / 2 + 2 * buffer
     rel_point = point - gate_center
 
     yaw_matrix = np.array([
@@ -131,7 +131,7 @@ def create_waypoints(gates, start_point):
             height = 1.0
         else:
             height = 0.525
-        z = height - 0.45 / 2
+        z = height
 
         tmp_wp_1 = [x - buffer * np.sin(yaw), y + buffer * np.cos(yaw), z]
         tmp_wp_2 = [x + buffer * np.sin(yaw), y - buffer * np.cos(yaw), z]
@@ -412,6 +412,10 @@ class Controller(BaseController):
                 target_rpy_rates = np.zeros(3)
                 command_type = Command.FULLSTATE
                 args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
+                print(info, "Info")
+                print(args, "Args")
+                print(obs, "Obs")
+
             # Notify set point stop has to be called every time we transition from low-level
             # commands to high-level ones. Prepares for landing
             elif step >= len(self.ref_x) and not self._setpoint_land:

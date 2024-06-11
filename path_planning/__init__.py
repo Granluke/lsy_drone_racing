@@ -1,1 +1,1 @@
-from plot_gates import calc_best_path
+from path_planning.calc_path_through_gates import calc_best_path

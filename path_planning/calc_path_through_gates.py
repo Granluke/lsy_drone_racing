@@ -5,6 +5,8 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import splprep, splev
 from math import sqrt
 
+obstacle_dimensions = {'shape': 'cylinder', 'height': 1.05, 'radius': 0.05}
+
 def create_gate(x, y, yaw, gate_type):
     if gate_type == 0:
         height = 1.0
@@ -12,8 +14,8 @@ def create_gate(x, y, yaw, gate_type):
         height = 0.525
     
     edge_length = 0.45
-    z_bottom = height - 0.45
-    z_top = height
+    z_bottom = height 
+    z_top = height + 0.45/2
     
     # Define the square in the XZ plane
     points = np.array([
@@ -50,7 +52,7 @@ def create_cylinder(x, y, z, height, radius):
 
 def point_in_gate(point, gate_center, yaw, height, buffer):
     gate_width = 0.45 + 2 * buffer
-    gate_height = height + 2 * buffer
+    gate_height = height + 0.45 / 2 + 2 * buffer
     rel_point = point - gate_center
 
     yaw_matrix = np.array([
@@ -94,7 +96,7 @@ def create_waypoints(gates, start_point):
             height = 1.0
         else:
             height = 0.525
-        z = height - 0.45 / 2
+        z = height
 
         tmp_wp_1 = [x - buffer * np.sin(yaw), y + buffer * np.cos(yaw), z]
         tmp_wp_2 = [x + buffer * np.sin(yaw), y - buffer * np.cos(yaw), z]
@@ -241,17 +243,18 @@ def adjust_waypoints(waypoints, cylinders):
 def calc_best_path(gates, cylinders, start_point, plot=True):
     waypoints, before_after_points, go_around_points, intersection_points = create_waypoints(gates, start_point)
     waypoints = adjust_waypoints(waypoints, cylinders)
-    tck, u = splprep(waypoints.T, s=0)
+    tck, u = splprep(waypoints.T, s=0.1)
     unew = np.linspace(0, 1, 1000)
     path = splev(unew, tck)
     if check_path_collision(np.array(path), cylinders):
         print("Path collides with obstacles, adjusting waypoints...")
         waypoints = adjust_waypoints(waypoints, cylinders)
-        tck, u = splprep(waypoints.T, s=0)
+        tck, u = splprep(waypoints.T, s=0.1)
     if plot:
         path = splev(unew, tck)
         plot_gates_and_cylinders(gates, cylinders, path, before_after_points, go_around_points, intersection_points)
     return waypoints, tck
+
 
 
 
@@ -269,9 +272,8 @@ OBSTACLES = [
     [0, 1.0, 0, 0, 0, 0]
 ]
 
-obstacle_dimensions = {'shape': 'cylinder', 'height': 1.05, 'radius': 0.05}
 
 initial_obs = [0.0, 0.0, 0.0]  # Example starting position
 START_POINT = [initial_obs[0], initial_obs[1], 0.3]
 
-#calc_best_path(GATES, OBSTACLES, START_POINT, plot=True)
+calc_best_path(GATES, OBSTACLES, START_POINT, plot=True)
