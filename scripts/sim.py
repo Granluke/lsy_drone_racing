@@ -25,6 +25,7 @@ from lsy_drone_racing.command import apply_sim_command
 from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.utils import load_config, load_controller
 from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
+from lsy_drone_racing.create_waypoints import create_waypoints
 
 if TYPE_CHECKING:
     from munch import Munch
@@ -69,6 +70,8 @@ def simulate(
     config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
     env_func = partial(make, "quadrotor", **config.quadrotor_config)
     env = DroneRacingObservationWrapper(make("firmware", env_func, FIRMWARE_FREQ, CTRL_FREQ))
+    x_goal = create_waypoints(config.quadrotor_config)
+    env.env.X_GOAL = x_goal
 
     # Load the controller module
     path = Path(__file__).parents[1] / controller
@@ -95,7 +98,7 @@ def simulate(
         info["ctrl_freq"] = CTRL_FREQ
         lap_finished = False
         # obs = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p, q, r]
-        ctrl = ctrl_class(obs, info, verbose=config.verbose)
+        ctrl = ctrl_class(obs, info, verbose=config.verbose, x_goal=env.env.X_GOAL)
         gui_timer = p.addUserDebugText(
             "", textPosition=[0, 0, 1], physicsClientId=env.pyb_client_id
         )

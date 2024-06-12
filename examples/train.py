@@ -46,7 +46,6 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     pyb_freq = config.quadrotor_config["pyb_freq"]
     assert pyb_freq % FIRMWARE_FREQ == 0, "pyb_freq must be a multiple of firmware freq"
     config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
-    config.quadrotor_config["obs_goal_horizon"] = 10
     x_goal = create_waypoints(config.quadrotor_config)
     
     env_factory = partial(make, "quadrotor",**config.quadrotor_config)
@@ -57,11 +56,7 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     # x,dx,y,dy,z,dz,phi,theta,psi,p,q,r
     # We need to define something for the missing states since we only have x,y,z
     # Obey the order of the states
-    if False:
-        return DroneRacingWrapper(firmware_env, terminate_on_lap=True)
-    # return RewardWrapper(DroneRacingWrapper(firmware_env, terminate_on_lap=True))
-    else:
-        return firmware_env
+    return DroneRacingWrapper(firmware_env, terminate_on_lap=True)
 
 
 def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
@@ -71,7 +66,7 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     config_path = Path(__file__).resolve().parents[1] / config # resolve() returns the absolute path, parents[1] /config adds the config
     PROCESSES_TO_TEST = 1 # Number of vectorized environments to train
     NUM_EXPERIMENTS = 1  # RL algorithms can often be unstable, so we run several experiments (see https://arxiv.org/abs/1709.06560)
-    TRAIN_STEPS = 1000
+    TRAIN_STEPS = 10000  # Number of training steps
     EVAL_EPS = 5 # Number of episodes for evaluation
     ALGO = PPO
     if_validate = False
@@ -90,7 +85,6 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     for experiment in range(NUM_EXPERIMENTS):
         # it is recommended to run several experiments due to variability in results
         obs = train_env.reset()[0]
-        import pdb; pdb.set_trace()
         model = ALGO("MlpPolicy", train_env, verbose=1, tensorboard_log="./logs", n_steps=TRAIN_STEPS,
                      learning_rate=0.0003, ent_coef=0.01, device='auto', n_epochs=10)
         start = time.time()
@@ -156,8 +150,8 @@ def create_waypoints(quadrotor_config: dict):
     assert max(ref_z) < 2.5, "Drone must stay below the ceiling"
     x_goal = np.zeros((ref_x.shape[0], 12))
     x_goal[:,0] = ref_x
-    x_goal[:,2] = ref_y
-    x_goal[:,4] = ref_z
+    x_goal[:,1] = ref_y
+    x_goal[:,2] = ref_z
     return x_goal
 
 
