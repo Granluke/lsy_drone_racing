@@ -84,6 +84,18 @@ class Controller(BaseController):
         #########################
         # REPLACE THIS (START) ##
         #########################
+        self.RL = True
+        if self.RL:
+            self.agent = PPO.load("ppo_drone_racing0003.zip")
+            self.action_scale = np.array([1, 1, 1, np.pi])
+        self.X_GOAL = x_goal
+        try:
+            self.ref_x = x_goal[:, 0]
+            self.ref_y = x_goal[:, 1]
+            self.ref_z = x_goal[:, 2]
+            self.waypoints = None
+        except TypeError:
+            raise TypeError("X_goal must be passed as argument to the controller")
 
         # Example: Hard-code waypoints through the gates. Obviously this is a crude way of
         # completing the challenge that is highly susceptible to noise and does not generalize at
@@ -141,21 +153,14 @@ class Controller(BaseController):
         # self.ref_x, self.ref_y, self.ref_z = interpolate.splev(t, tck)
         # assert max(self.ref_z) < 2.5, "Drone must stay below the ceiling"
 
-        # if self.VERBOSE:
-        #     # Draw the trajectory on PyBullet's GUI.
-        #     draw_trajectory(initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
+        if self.VERBOSE:
+            # Draw the trajectory on PyBullet's GUI.
+            draw_trajectory(initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
 
         self._take_off = False
         self._setpoint_land = False
         self._land = False
-        self.agent = PPO.load("ppo_drone_racing0003.zip")
-        self.RL = True
-        self.action_scale = np.array([1, 1, 1, np.pi])
-        self.X_GOAL = x_goal
-        try:
-            self.ref_x = x_goal[:, 0]
-        except TypeError:
-            raise TypeError("X_goal must be passed as argument to the controller")
+
         #########################
         # REPLACE THIS (END) ####
         #########################

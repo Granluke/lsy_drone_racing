@@ -56,7 +56,7 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     # x,dx,y,dy,z,dz,phi,theta,psi,p,q,r
     # We need to define something for the missing states since we only have x,y,z
     # Obey the order of the states
-    return DroneRacingWrapper(firmware_env, terminate_on_lap=True)
+    return DroneRacingWrapper(firmware_env, terminate_on_lap=True, train_random_state=True)
 
 
 def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
@@ -64,9 +64,9 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
 
     logging.basicConfig(level=logging.INFO)
     config_path = Path(__file__).resolve().parents[1] / config # resolve() returns the absolute path, parents[1] /config adds the config
-    PROCESSES_TO_TEST = 1 # Number of vectorized environments to train
+    PROCESSES_TO_TEST = 4 # Number of vectorized environments to train
     NUM_EXPERIMENTS = 1  # RL algorithms can often be unstable, so we run several experiments (see https://arxiv.org/abs/1709.06560)
-    TRAIN_STEPS = 10000  # Number of training steps
+    TRAIN_STEPS = 25000  # Number of training steps
     EVAL_EPS = 5 # Number of episodes for evaluation
     ALGO = PPO
     if_validate = False

@@ -42,7 +42,7 @@ class DroneRacingWrapper(Wrapper):
 
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self, env: FirmwareWrapper, terminate_on_lap: bool = True):
+    def __init__(self, env: FirmwareWrapper, terminate_on_lap: bool = True, train_random_state: bool = False):
         """Initialize the wrapper.
 
         Args:
@@ -123,6 +123,7 @@ class DroneRacingWrapper(Wrapper):
         #       suggest otherwise.
         self._f_rotors = np.zeros(4)
         self.X_GOAL = self.env.env.X_GOAL
+        self.train_random_state = train_random_state
         self.wrap_dist = 0
 
     @property
@@ -145,7 +146,15 @@ class DroneRacingWrapper(Wrapper):
         self._reset_required = False
         self._sim_time = 0.0
         self._f_rotors[:] = 0.0
+        if self.train_random_state:
+            start_ind = np.random.randint(0, self.X_GOAL.shape[0]/2 - 1)
+            start_pose = self.X_GOAL[start_ind,:3]
+            self.env.env.X_GOAL = self.X_GOAL[start_ind:,:]
+            self.env.env.INIT_X = start_pose[0]
+            self.env.env.INIT_Y = start_pose[1]
+            self.env.env.INIT_Z = start_pose[2]
         obs, info = self.env.reset()
+        # print(f'Start Pose = {obs[:6:2]}')
         # Store obstacle height for observation expansion during env steps.
         if self.env.env.TASK == Task.TRAJ_TRACKING and self.env.env.COST == Cost.RL_REWARD:
             crt_step = self.env.env.ctrl_step_counter
@@ -155,6 +164,7 @@ class DroneRacingWrapper(Wrapper):
         else:
             obs = self.observation_transform(obs, info).astype(np.float32)
         self._drone_pose = obs[[0, 1, 2, 5]]
+        # print(f'Transform Pose = {self._drone_pose[:3]}')
         return obs, info
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
