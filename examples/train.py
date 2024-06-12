@@ -27,7 +27,7 @@ from scipy import interpolate
 
 from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.utils import load_config, load_controller
-from lsy_drone_racing.wrapper import DroneRacingWrapper
+from lsy_drone_racing.wrapper import DroneRacingWrapper, RewardWrapper
 
 logger = logging.getLogger(__name__)
 
@@ -46,28 +46,33 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     pyb_freq = config.quadrotor_config["pyb_freq"]
     assert pyb_freq % FIRMWARE_FREQ == 0, "pyb_freq must be a multiple of firmware freq"
     config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
+    config.quadrotor_config["obs_goal_horizon"] = 10
     x_goal = create_waypoints(config.quadrotor_config)
     
     env_factory = partial(make, "quadrotor",**config.quadrotor_config)
     firmware_env = make("firmware", env_factory, FIRMWARE_FREQ, CTRL_FREQ)
     firmware_env.env.X_GOAL = x_goal
+    # firmware_env = RewardWrapper(firmware_env)
     # goal state is of shape (N,12), where N is the number of waypoints and 12 is the states of the drone
     # x,dx,y,dy,z,dz,phi,theta,psi,p,q,r
     # We need to define something for the missing states since we only have x,y,z
     # Obey the order of the states
-    return DroneRacingWrapper(firmware_env, terminate_on_lap=True)
+    if False:
+        return DroneRacingWrapper(firmware_env, terminate_on_lap=True)
+    # return RewardWrapper(DroneRacingWrapper(firmware_env, terminate_on_lap=True))
+    else:
+        return firmware_env
 
 
 def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     """Create the environment, check its compatibility with sb3, and run a PPO agent."""
-    
+
     logging.basicConfig(level=logging.INFO)
     config_path = Path(__file__).resolve().parents[1] / config # resolve() returns the absolute path, parents[1] /config adds the config
-    PROCESSES_TO_TEST = 1
+    PROCESSES_TO_TEST = 1 # Number of vectorized environments to train
     NUM_EXPERIMENTS = 1  # RL algorithms can often be unstable, so we run several experiments (see https://arxiv.org/abs/1709.06560)
     TRAIN_STEPS = 1000
-    # Number of episodes for evaluation
-    EVAL_EPS = 5
+    EVAL_EPS = 5 # Number of episodes for evaluation
     ALGO = PPO
     if_validate = False
     reward_averages = []
@@ -84,16 +89,17 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     times = []
     for experiment in range(NUM_EXPERIMENTS):
         # it is recommended to run several experiments due to variability in results
-        train_env.reset()
+        obs = train_env.reset()[0]
+        import pdb; pdb.set_trace()
         model = ALGO("MlpPolicy", train_env, verbose=1, tensorboard_log="./logs", n_steps=TRAIN_STEPS,
-                     learning_rate=0.0001, batch_size=TRAIN_STEPS*PROCESSES_TO_TEST, ent_coef=0.1, device='auto', n_epochs=10)
+                     learning_rate=0.0003, ent_coef=0.01, device='auto', n_epochs=10)
         start = time.time()
         model.learn(total_timesteps=TRAIN_STEPS, progress_bar=True, tb_log_name='./logs')
         times.append(time.time() - start)
         if if_validate:
             mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=EVAL_EPS)
             rewards.append(mean_reward)
-    model.save("ppo_drone_racing")
+    model.save("ppo_drone_racing0003")
     train_env.close()
     eval_env.close()
     if if_validate:
