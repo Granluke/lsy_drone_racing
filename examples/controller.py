@@ -86,7 +86,7 @@ class Controller(BaseController):
         #########################
         self.RL = True
         if self.RL:
-            self.agent = PPO.load("ppo_drone_racing0003.zip")
+            self.agent = PPO.load("ppo_drone_racing0005.zip")
             self.action_scale = np.array([1, 1, 1, np.pi])
         self.X_GOAL = x_goal
         try:
@@ -155,7 +155,10 @@ class Controller(BaseController):
 
         if self.VERBOSE:
             # Draw the trajectory on PyBullet's GUI.
-            draw_trajectory(initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
+            try:
+                draw_trajectory(initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
+            except TypeError:
+                pass
 
         self._take_off = False
         self._setpoint_land = False

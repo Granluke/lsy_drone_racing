@@ -47,7 +47,7 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     assert pyb_freq % FIRMWARE_FREQ == 0, "pyb_freq must be a multiple of firmware freq"
     config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
     x_goal = create_waypoints(config.quadrotor_config)
-    
+    x_goal = x_goal[::2,:]
     env_factory = partial(make, "quadrotor",**config.quadrotor_config)
     firmware_env = make("firmware", env_factory, FIRMWARE_FREQ, CTRL_FREQ)
     firmware_env.env.X_GOAL = x_goal
@@ -64,9 +64,9 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
 
     logging.basicConfig(level=logging.INFO)
     config_path = Path(__file__).resolve().parents[1] / config # resolve() returns the absolute path, parents[1] /config adds the config
-    PROCESSES_TO_TEST = 4 # Number of vectorized environments to train
+    PROCESSES_TO_TEST = 2 # Number of vectorized environments to train
     NUM_EXPERIMENTS = 1  # RL algorithms can often be unstable, so we run several experiments (see https://arxiv.org/abs/1709.06560)
-    TRAIN_STEPS = 25000  # Number of training steps
+    TRAIN_STEPS = 2**15  # Number of training steps
     EVAL_EPS = 5 # Number of episodes for evaluation
     ALGO = PPO
     if_validate = False
@@ -76,7 +76,6 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     train_env = create_race_env(config_path=config_path, gui=gui)
     check_env(train_env)
     vec_train_env = make_vec_env(lambda: create_race_env(config_path=config_path, gui=gui), n_envs=PROCESSES_TO_TEST)
-    # check_env(vec_train_env)
     train_env = vec_train_env
     eval_env = create_race_env(config_path=config_path, gui=gui)
     check_env(eval_env)
@@ -84,16 +83,19 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     times = []
     for experiment in range(NUM_EXPERIMENTS):
         # it is recommended to run several experiments due to variability in results
-        obs = train_env.reset()[0]
-        model = ALGO("MlpPolicy", train_env, verbose=1, tensorboard_log="./logs", n_steps=TRAIN_STEPS,
-                     learning_rate=0.0003, ent_coef=0.01, device='auto', n_epochs=10)
+        train_env.reset()
+        n_steps = 2**10
+        batch_size = n_steps * PROCESSES_TO_TEST // 2
+        model = ALGO("MlpPolicy", train_env, verbose=1, tensorboard_log="./logs", n_steps=n_steps,
+                     learning_rate=0.0003, ent_coef=0.01, device='auto', n_epochs=10, batch_size=batch_size,
+                     clip_range=0.1, gae_lambda=0.95)
         start = time.time()
         model.learn(total_timesteps=TRAIN_STEPS, progress_bar=True, tb_log_name='./logs')
         times.append(time.time() - start)
         if if_validate:
             mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=EVAL_EPS)
             rewards.append(mean_reward)
-    model.save("ppo_drone_racing0003")
+    model.save("ppo_drone_seed_216")
     train_env.close()
     eval_env.close()
     if if_validate:

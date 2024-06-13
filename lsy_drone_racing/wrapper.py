@@ -18,6 +18,7 @@ Warning:
 
 from __future__ import annotations
 
+from copy import deepcopy
 import logging
 from typing import Any
 
@@ -124,8 +125,8 @@ class DroneRacingWrapper(Wrapper):
         self._f_rotors = np.zeros(4)
         self.X_GOAL = self.env.env.X_GOAL
         self.train_random_state = train_random_state
-        self.wrap_dist = 0
-
+        self._wrap_dist = None
+        self._wrap_ctr_step = None
     @property
     def time(self) -> float:
         """Return the current simulation time in seconds."""
@@ -147,24 +148,28 @@ class DroneRacingWrapper(Wrapper):
         self._sim_time = 0.0
         self._f_rotors[:] = 0.0
         if self.train_random_state:
-            start_ind = np.random.randint(0, self.X_GOAL.shape[0]/2 - 1)
+            start_ind = np.random.randint(1, self.X_GOAL.shape[0]/2)
             start_pose = self.X_GOAL[start_ind,:3]
             self.env.env.X_GOAL = self.X_GOAL[start_ind:,:]
             self.env.env.INIT_X = start_pose[0]
             self.env.env.INIT_Y = start_pose[1]
             self.env.env.INIT_Z = start_pose[2]
+            if start_ind > self.X_GOAL.shape[0]/4:
+                next_pose = self.X_GOAL[start_ind+1,:3]
+                self.env.env.INIT_X_DOT = (next_pose[0] - start_pose[0])*100
+                self.env.env.INIT_Y_DOT = (next_pose[1] - start_pose[1])*100
+                self.env.env.INIT_Z_DOT = (next_pose[2] - start_pose[2])*100
         obs, info = self.env.reset()
         # print(f'Start Pose = {obs[:6:2]}')
         # Store obstacle height for observation expansion during env steps.
         if self.env.env.TASK == Task.TRAJ_TRACKING and self.env.env.COST == Cost.RL_REWARD:
-            crt_step = self.env.env.ctrl_step_counter
-            obs = self.observation_transform(obs, info, self.X_GOAL, crt_step, self.obs_goal_horizon).astype(np.float32)
+            self._wrap_ctr_step = 0
+            obs = self.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon).astype(np.float32)
             goal_pos_last = obs[-12:]
-            self.wrap_dist = np.linalg.norm(obs[:3] - goal_pos_last[:3], axis=0)
+            self._wrap_dist = np.linalg.norm(obs[:3] - goal_pos_last[:3], axis=0)
         else:
             obs = self.observation_transform(obs, info).astype(np.float32)
         self._drone_pose = obs[[0, 1, 2, 5]]
-        # print(f'Transform Pose = {self._drone_pose[:3]}')
         return obs, info
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
@@ -207,8 +212,8 @@ class DroneRacingWrapper(Wrapper):
             self._sim_time += self.env.ctrl_dt
         
         if self.env.env.TASK == Task.TRAJ_TRACKING and self.env.env.COST == Cost.RL_REWARD:
-            crt_step = self.env.env.ctrl_step_counter
-            obs = self.observation_transform(obs, info, self.X_GOAL, crt_step, self.obs_goal_horizon).astype(np.float32)
+            self._wrap_ctr_step += 1
+            obs = self.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon).astype(np.float32)
             #### Integrate Reward Wrapper inside
             reward = self._compute_reward(obs, reward, terminated, truncated, info)
         else:
@@ -305,15 +310,15 @@ class DroneRacingWrapper(Wrapper):
         dist = np.sum(np.linalg.norm(drone_pos - goal_pos, axis=0))
         reward += np.exp(-dist)
         ## Enforce Progress
-        if self.env.env.ctrl_step_counter >= 1:
+        if self._wrap_ctr_step >= 1:
             goal_pos_last_old = goal_pos_all[-2,:]
             wrap_dist_old = np.linalg.norm(drone_pos - goal_pos_last_old, axis=0)
-            if wrap_dist_old < self.wrap_dist:
-                reward += 0.2
+            if wrap_dist_old < self._wrap_dist:
+                reward += 0.1
             goal_pos_last = goal_pos_all[-1,:]
-            self.wrap_dist = np.linalg.norm(drone_pos - goal_pos_last, axis=0)
+            self._wrap_dist = np.linalg.norm(drone_pos - goal_pos_last, axis=0)
         ## Crash Penality
-        crash_penality = -1 if terminated and not info["task_completed"] else 0
+        crash_penality = -5 if self.env.env.currently_collided else 0
         return reward+crash_penality
 
         
@@ -341,6 +346,7 @@ class DroneRacingObservationWrapper:
         self.pyb_client_id: int = env.env.PYB_CLIENT
         self.X_GOAL = self.env.env.X_GOAL
         self.obs_goal_horizon = self.env.env.obs_goal_horizon
+        self._wrap_ctr_step = None
 
     def __getattribute__(self, name: str) -> Any:
         """Get an attribute from the object.
@@ -370,8 +376,8 @@ class DroneRacingObservationWrapper:
         """
         obs, info = self.env.reset(*args, **kwargs)
         if self.env.env.TASK == Task.TRAJ_TRACKING and self.env.env.COST == Cost.RL_REWARD:
-            crt_step = self.env.env.ctrl_step_counter
-            obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, crt_step, self.obs_goal_horizon).astype(np.float32)
+            self._wrap_ctr_step = 0
+            obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon).astype(np.float32)
         else:
             obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)
         return obs, info
@@ -390,8 +396,8 @@ class DroneRacingObservationWrapper:
         """
         obs, reward, done, info, action = self.env.step(*args, **kwargs)
         if self.env.env.TASK == Task.TRAJ_TRACKING and self.env.env.COST == Cost.RL_REWARD:
-            crt_step = self.env.env.ctrl_step_counter
-            obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, crt_step, self.obs_goal_horizon).astype(np.float32)
+            self._wrap_ctr_step += 1
+            obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon).astype(np.float32)
         else:
             obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)
         return obs, reward, done, info, action
