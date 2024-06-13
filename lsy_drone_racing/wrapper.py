@@ -43,7 +43,7 @@ class DroneRacingWrapper(Wrapper):
 
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self, env: FirmwareWrapper, terminate_on_lap: bool = True, train_random_state: bool = False):
+    def __init__(self, env: FirmwareWrapper, terminate_on_lap: bool = True, train_random_state: bool = False, inc_gate_obs: bool = True):
         """Initialize the wrapper.
 
         Args:
@@ -93,13 +93,19 @@ class DroneRacingWrapper(Wrapper):
         # Velocity limits are set to 10 m/s for the drone and 10 rad/s for the angular velocity.
         # While drones could go faster in theory, it's not safe in practice and we don't allow it in
         # sim either.
+        self.inc_gate_obs = inc_gate_obs
         drone_limits = [5, 5, 5, np.pi, np.pi, np.pi, 10, 10, 10, 10, 10, 10]
-        gate_limits = [5, 5, 5, np.pi] * n_gates + [1] * n_gates  # Gate poses and range mask
-        obstacle_limits = [5, 5, 5] * n_obstacles + [1] * n_obstacles  # Obstacle pos and range mask
-        obs_limits = drone_limits + gate_limits + obstacle_limits + [n_gates]  # [1] for gate_id
-        obs_limits_high = np.array(obs_limits)
-        obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
-        
+        ## We may want to choose if we want to include the gate and obstacle observations
+        if self.inc_gate_obs:
+            gate_limits = [5, 5, 5, np.pi] * n_gates + [1] * n_gates  # Gate poses and range mask
+            obstacle_limits = [5, 5, 5] * n_obstacles + [1] * n_obstacles  # Obstacle pos and range mask
+            obs_limits = drone_limits + gate_limits + obstacle_limits + [n_gates]  # [1] for gate_id
+            obs_limits_high = np.array(obs_limits)
+            obs_limits_low = np.concatenate([-obs_limits_high[:-1], [-1]])
+        else:
+            obs_limits_high = np.array(drone_limits)
+            obs_limits_low = -np.array(drone_limits)
+        ## Add Goal States to Observation Space
         if self.env.env.TASK == Task.TRAJ_TRACKING and self.env.env.COST == Cost.RL_REWARD:
             self.obs_goal_horizon = self.env.env.obs_goal_horizon
             temp_h = np.array(drone_limits*self.obs_goal_horizon)
@@ -156,15 +162,16 @@ class DroneRacingWrapper(Wrapper):
             self.env.env.INIT_Z = start_pose[2]
             if start_ind > self.X_GOAL.shape[0]/4:
                 next_pose = self.X_GOAL[start_ind+1,:3]
-                self.env.env.INIT_X_DOT = (next_pose[0] - start_pose[0])*100
-                self.env.env.INIT_Y_DOT = (next_pose[1] - start_pose[1])*100
-                self.env.env.INIT_Z_DOT = (next_pose[2] - start_pose[2])*100
+                self.env.env.INIT_X_DOT = (next_pose[0] - start_pose[0])*30
+                self.env.env.INIT_Y_DOT = (next_pose[1] - start_pose[1])*30
+                self.env.env.INIT_Z_DOT = (next_pose[2] - start_pose[2])*30
         obs, info = self.env.reset()
-        # print(f'Start Pose = {obs[:6:2]}')
+        # env.reset() cannot reset in the exact position, which leads to a mismatch.
+        self.env.env.X_GOAL[0,:3] = obs[:3]
         # Store obstacle height for observation expansion during env steps.
         if self.env.env.TASK == Task.TRAJ_TRACKING and self.env.env.COST == Cost.RL_REWARD:
             self._wrap_ctr_step = 0
-            obs = self.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon).astype(np.float32)
+            obs = self.observation_transform(obs, info, self.env.env.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
             goal_pos_last = obs[-12:]
             self._wrap_dist = np.linalg.norm(obs[:3] - goal_pos_last[:3], axis=0)
         else:
@@ -213,7 +220,7 @@ class DroneRacingWrapper(Wrapper):
         
         if self.env.env.TASK == Task.TRAJ_TRACKING and self.env.env.COST == Cost.RL_REWARD:
             self._wrap_ctr_step += 1
-            obs = self.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon).astype(np.float32)
+            obs = self.observation_transform(obs, info, self.env.env.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
             #### Integrate Reward Wrapper inside
             reward = self._compute_reward(obs, reward, terminated, truncated, info)
         else:
@@ -251,7 +258,7 @@ class DroneRacingWrapper(Wrapper):
         assert self.pyb_client_id != -1, "PyBullet not initialized with active GUI"
 
     @staticmethod
-    def observation_transform(obs: np.ndarray, info: dict[str, Any], X_GOAL: np.ndarray=None, next_step: int=-1, obs_goal_horizon: int=0) -> np.ndarray:
+    def observation_transform(obs: np.ndarray, info: dict[str, Any], X_GOAL: np.ndarray=None, crnt_step: int=-1, obs_goal_horizon: int=0, inc_gate_obs: bool=True) -> np.ndarray:
         """Transform the observation to include additional information.
 
         Args:
@@ -265,21 +272,31 @@ class DroneRacingWrapper(Wrapper):
         drone_vel = obs[1:6:2]
         drone_rpy = obs[6:9]
         drone_ang_vel = obs[8:11]
-        obs = np.concatenate(
-            [
-                drone_pos,
-                drone_rpy,
-                drone_vel,
-                drone_ang_vel,
-                info["gates_pose"][:, [0, 1, 2, 5]].flatten(),
-                info["gates_in_range"],
-                info["obstacles_pose"][:, :3].flatten(),
-                info["obstacles_in_range"],
-                [info["current_gate_id"]],
-            ]
-        )
-        if X_GOAL is not None and next_step != -1:
-            wp_idx = [min(next_step + i, X_GOAL.shape[0]-1) 
+        if inc_gate_obs:
+            obs = np.concatenate(
+                [
+                    drone_pos,
+                    drone_rpy,
+                    drone_vel,
+                    drone_ang_vel,
+                    info["gates_pose"][:, [0, 1, 2, 5]].flatten(),
+                    info["gates_in_range"],
+                    info["obstacles_pose"][:, :3].flatten(),
+                    info["obstacles_in_range"],
+                    [info["current_gate_id"]],
+                ]
+            )
+        else:
+            obs = np.concatenate(
+                [
+                    drone_pos,
+                    drone_rpy,
+                    drone_vel,
+                    drone_ang_vel,
+                ]
+            )
+        if X_GOAL is not None and crnt_step != -1:
+            wp_idx = [min(crnt_step + i, X_GOAL.shape[0]-1) 
                     for i in range(obs_goal_horizon)]
             goal_state = X_GOAL[wp_idx].flatten()
             obs = np.concatenate([obs, goal_state])
@@ -307,19 +324,30 @@ class DroneRacingWrapper(Wrapper):
         goal_pos_all = np.array([goal_x, goal_y, goal_z]).T
         # Don't know if it is necessary to enforce closeness to the whole horizon
         goal_pos = goal_pos_all[0,:]
-        dist = np.sum(np.linalg.norm(drone_pos - goal_pos, axis=0))
-        reward += np.exp(-dist)
+        if False:
+            dist = np.sum(np.linalg.norm(drone_pos - goal_pos, axis=0))
+            reward += np.exp(-dist)
+        else:
+            dist = np.sum(np.linalg.norm(drone_pos - goal_pos, axis=0))
+            rew_std = 0.001
+            reward += np.exp(-(dist**2)/(rew_std**2))
         ## Enforce Progress
         if self._wrap_ctr_step >= 1:
             goal_pos_last_old = goal_pos_all[-2,:]
             wrap_dist_old = np.linalg.norm(drone_pos - goal_pos_last_old, axis=0)
             if wrap_dist_old < self._wrap_dist:
-                reward += 0.1
+                reward += 0.5
+            else:
+                reward -= 0.5
             goal_pos_last = goal_pos_all[-1,:]
             self._wrap_dist = np.linalg.norm(drone_pos - goal_pos_last, axis=0)
         ## Crash Penality
-        crash_penality = -5 if self.env.env.currently_collided else 0
-        return reward+crash_penality
+        crash_penality = -1 if self.env.env.currently_collided else 0
+        ## Constraint Violation Penality
+        cstr_penalty = -1 if self.env.env.cnstr_violation else 0
+        ## Gate Passing Reward
+        gate_rew = 1 if self.env.env.stepped_through_gate else 0
+        return reward+crash_penality+cstr_penalty+gate_rew
 
         
 class DroneRacingObservationWrapper:
@@ -334,7 +362,7 @@ class DroneRacingObservationWrapper:
         not compatible with the gymnasium API.
     """
 
-    def __init__(self, env: FirmwareWrapper):
+    def __init__(self, env: FirmwareWrapper, inc_gate_obs: bool=True):
         """Initialize the wrapper.
 
         Args:
@@ -347,6 +375,7 @@ class DroneRacingObservationWrapper:
         self.X_GOAL = self.env.env.X_GOAL
         self.obs_goal_horizon = self.env.env.obs_goal_horizon
         self._wrap_ctr_step = None
+        self.inc_gate_obs = inc_gate_obs
 
     def __getattribute__(self, name: str) -> Any:
         """Get an attribute from the object.
@@ -377,7 +406,7 @@ class DroneRacingObservationWrapper:
         obs, info = self.env.reset(*args, **kwargs)
         if self.env.env.TASK == Task.TRAJ_TRACKING and self.env.env.COST == Cost.RL_REWARD:
             self._wrap_ctr_step = 0
-            obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon).astype(np.float32)
+            obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
         else:
             obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)
         return obs, info
@@ -397,7 +426,7 @@ class DroneRacingObservationWrapper:
         obs, reward, done, info, action = self.env.step(*args, **kwargs)
         if self.env.env.TASK == Task.TRAJ_TRACKING and self.env.env.COST == Cost.RL_REWARD:
             self._wrap_ctr_step += 1
-            obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon).astype(np.float32)
+            obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
         else:
             obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)
         return obs, reward, done, info, action

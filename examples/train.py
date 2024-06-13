@@ -51,12 +51,13 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     env_factory = partial(make, "quadrotor",**config.quadrotor_config)
     firmware_env = make("firmware", env_factory, FIRMWARE_FREQ, CTRL_FREQ)
     firmware_env.env.X_GOAL = x_goal
+    inc_gate_obs = config.quadrotor_config["inc_gate_obs"]
     # firmware_env = RewardWrapper(firmware_env)
     # goal state is of shape (N,12), where N is the number of waypoints and 12 is the states of the drone
     # x,dx,y,dy,z,dz,phi,theta,psi,p,q,r
     # We need to define something for the missing states since we only have x,y,z
     # Obey the order of the states
-    return DroneRacingWrapper(firmware_env, terminate_on_lap=True, train_random_state=True)
+    return DroneRacingWrapper(firmware_env, terminate_on_lap=True, train_random_state=True, inc_gate_obs=inc_gate_obs)
 
 
 def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
@@ -77,8 +78,9 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     check_env(train_env)
     vec_train_env = make_vec_env(lambda: create_race_env(config_path=config_path, gui=gui), n_envs=PROCESSES_TO_TEST)
     train_env = vec_train_env
-    eval_env = create_race_env(config_path=config_path, gui=gui)
-    check_env(eval_env)
+    if if_validate:
+        eval_env = create_race_env(config_path=config_path, gui=gui)
+        check_env(eval_env)
     rewards = []
     times = []
     for experiment in range(NUM_EXPERIMENTS):
@@ -95,10 +97,10 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
         if if_validate:
             mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=EVAL_EPS)
             rewards.append(mean_reward)
-    model.save("ppo_drone_seed_216")
+    model.save("ppo_gaus_random2")
     train_env.close()
-    eval_env.close()
     if if_validate:
+        eval_env.close()
         reward_averages.append(np.mean(rewards))
         reward_std.append(np.std(rewards))
         training_times.append(np.mean(times))

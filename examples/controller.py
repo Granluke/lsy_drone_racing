@@ -86,7 +86,7 @@ class Controller(BaseController):
         #########################
         self.RL = True
         if self.RL:
-            self.agent = PPO.load("ppo_drone_racing0005.zip")
+            self.agent = PPO.load("ppo_gaus_random2.zip")
             self.action_scale = np.array([1, 1, 1, np.pi])
         self.X_GOAL = x_goal
         try:

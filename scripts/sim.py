@@ -69,7 +69,8 @@ def simulate(
     # user sends ctrl signals, not the firmware.
     config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
     env_func = partial(make, "quadrotor", **config.quadrotor_config)
-    env = DroneRacingObservationWrapper(make("firmware", env_func, FIRMWARE_FREQ, CTRL_FREQ))
+    inc_gate_obs = config.quadrotor_config["inc_gate_obs"]
+    env = DroneRacingObservationWrapper(make("firmware", env_func, FIRMWARE_FREQ, CTRL_FREQ), inc_gate_obs=inc_gate_obs)
     x_goal = create_waypoints(config.quadrotor_config)
     env.env.X_GOAL = x_goal
 
@@ -124,8 +125,8 @@ def simulate(
             # action is not applied in env.step()
             apply_sim_command(env, command_type, args)
             obs, reward, done, info, action = env.step(curr_time, action)
-            print(f"obs: {obs} \n !!!!!!!!!!!!")
-            print(f"Action: {action}")
+            # print(f"obs: {obs} \n !!!!!!!!!!!!")
+            # print(f"Action: {action}")
             # Update the controller internal state and models.
             ctrl.step_learn(action, obs, reward, done, info)
             # Add up reward, collisions, violations.
