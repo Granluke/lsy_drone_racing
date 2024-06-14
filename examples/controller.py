@@ -46,7 +46,6 @@ class Controller(BaseController):
         initial_obs: np.ndarray,
         initial_info: dict,
         buffer_size: int = 100,
-        x_goal: np.ndarray = None,
         verbose: bool = False,
     ):
         """Initialization of the controller.
@@ -88,70 +87,62 @@ class Controller(BaseController):
         if self.RL:
             self.agent = PPO.load("ppo_gaus_random2.zip")
             self.action_scale = np.array([1, 1, 1, np.pi])
-        self.X_GOAL = x_goal
-        try:
-            self.ref_x = x_goal[:, 0]
-            self.ref_y = x_goal[:, 1]
-            self.ref_z = x_goal[:, 2]
-            self.waypoints = None
-        except TypeError:
-            raise TypeError("X_goal must be passed as argument to the controller")
-
+    
         # Example: Hard-code waypoints through the gates. Obviously this is a crude way of
         # completing the challenge that is highly susceptible to noise and does not generalize at
         # all. It is meant solely as an example on how the drones can be controlled
-        # waypoints = []
-        # waypoints.append([self.initial_obs[0], self.initial_obs[1], 0.3])
-        # gates = self.NOMINAL_GATES
-        # z_low = initial_info["gate_dimensions"]["low"]["height"]
-        # z_high = initial_info["gate_dimensions"]["tall"]["height"]
-        # waypoints.append([1, 0, z_low])
-        # waypoints.append([gates[0][0] + 0.2, gates[0][1] + 0.1, z_low])
-        # waypoints.append([gates[0][0] + 0.1, gates[0][1], z_low])
-        # waypoints.append([gates[0][0] - 0.1, gates[0][1], z_low])
-        # waypoints.append(
-        #     [
-        #         (gates[0][0] + gates[1][0]) / 2 - 0.7,
-        #         (gates[0][1] + gates[1][1]) / 2 - 0.3,
-        #         (z_low + z_high) / 2,
-        #     ]
-        # )
-        # waypoints.append(
-        #     [
-        #         (gates[0][0] + gates[1][0]) / 2 - 0.5,
-        #         (gates[0][1] + gates[1][1]) / 2 - 0.6,
-        #         (z_low + z_high) / 2,
-        #     ]
-        # )
-        # waypoints.append([gates[1][0] - 0.3, gates[1][1] - 0.2, z_high])
-        # waypoints.append([gates[1][0] + 0.2, gates[1][1] + 0.2, z_high])
-        # waypoints.append([gates[2][0], gates[2][1] - 0.4, z_low])
-        # waypoints.append([gates[2][0], gates[2][1] + 0.2, z_low])
-        # waypoints.append([gates[2][0], gates[2][1] + 0.2, z_high + 0.2])
-        # waypoints.append([gates[3][0], gates[3][1] + 0.1, z_high])
-        # waypoints.append([gates[3][0], gates[3][1] - 0.1, z_high + 0.1])
-        # waypoints.append(
-        #     [
-        #         initial_info["x_reference"][0],
-        #         initial_info["x_reference"][2],
-        #         initial_info["x_reference"][4],
-        #     ]
-        # )
-        # waypoints.append(
-        #     [
-        #         initial_info["x_reference"][0],
-        #         initial_info["x_reference"][2] - 0.2,
-        #         initial_info["x_reference"][4],
-        #     ]
-        # )
-        # waypoints = np.array(waypoints)
+        waypoints = []
+        waypoints.append([self.initial_obs[0], self.initial_obs[1], 0.3])
+        gates = self.NOMINAL_GATES
+        z_low = initial_info["gate_dimensions"]["low"]["height"]
+        z_high = initial_info["gate_dimensions"]["tall"]["height"]
+        waypoints.append([1, 0, z_low])
+        waypoints.append([gates[0][0] + 0.2, gates[0][1] + 0.1, z_low])
+        waypoints.append([gates[0][0] + 0.1, gates[0][1], z_low])
+        waypoints.append([gates[0][0] - 0.1, gates[0][1], z_low])
+        waypoints.append(
+            [
+                (gates[0][0] + gates[1][0]) / 2 - 0.7,
+                (gates[0][1] + gates[1][1]) / 2 - 0.3,
+                (z_low + z_high) / 2,
+            ]
+        )
+        waypoints.append(
+            [
+                (gates[0][0] + gates[1][0]) / 2 - 0.5,
+                (gates[0][1] + gates[1][1]) / 2 - 0.6,
+                (z_low + z_high) / 2,
+            ]
+        )
+        waypoints.append([gates[1][0] - 0.3, gates[1][1] - 0.2, z_high])
+        waypoints.append([gates[1][0] + 0.2, gates[1][1] + 0.2, z_high])
+        waypoints.append([gates[2][0], gates[2][1] - 0.4, z_low])
+        waypoints.append([gates[2][0], gates[2][1] + 0.2, z_low])
+        waypoints.append([gates[2][0], gates[2][1] + 0.2, z_high + 0.2])
+        waypoints.append([gates[3][0], gates[3][1] + 0.1, z_high])
+        waypoints.append([gates[3][0], gates[3][1] - 0.1, z_high + 0.1])
+        waypoints.append(
+            [
+                initial_info["x_reference"][0],
+                initial_info["x_reference"][2],
+                initial_info["x_reference"][4],
+            ]
+        )
+        waypoints.append(
+            [
+                initial_info["x_reference"][0],
+                initial_info["x_reference"][2] - 0.2,
+                initial_info["x_reference"][4],
+            ]
+        )
+        waypoints = np.array(waypoints)
 
-        # tck, u = interpolate.splprep([waypoints[:, 0], waypoints[:, 1], waypoints[:, 2]], s=0.1)
-        # self.waypoints = waypoints
-        # duration = 12
-        # t = np.linspace(0, 1, int(duration * self.CTRL_FREQ))
-        # self.ref_x, self.ref_y, self.ref_z = interpolate.splev(t, tck)
-        # assert max(self.ref_z) < 2.5, "Drone must stay below the ceiling"
+        tck, u = interpolate.splprep([waypoints[:, 0], waypoints[:, 1], waypoints[:, 2]], s=0.1)
+        self.waypoints = waypoints
+        duration = 12
+        t = np.linspace(0, 1, int(duration * self.CTRL_FREQ))
+        self.ref_x, self.ref_y, self.ref_z = interpolate.splev(t, tck)
+        assert max(self.ref_z) < 2.5, "Drone must stay below the ceiling"
 
         if self.VERBOSE:
             # Draw the trajectory on PyBullet's GUI.
@@ -163,6 +154,11 @@ class Controller(BaseController):
         self._take_off = False
         self._setpoint_land = False
         self._land = False
+        x_goal = np.zeros((self.ref_x.shape[0], 12))
+        x_goal[:,0] = self.ref_x
+        x_goal[:,1] = self.ref_y
+        x_goal[:,2] = self.ref_z
+        self.x_goal = x_goal
 
         #########################
         # REPLACE THIS (END) ####

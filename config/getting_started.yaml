@@ -25,21 +25,21 @@ quadrotor_config:
   # cost: competition  # Sparse reward function, if you desire, re-implement it in Quadrotor._get_reward()
   #                    # github.com/utiasDSL/safe-control-gym/blob/beta-iros-competition/safe_control_gym/envs/gym_pybullet_drones/quadrotor.py
   
-  # task: stabilization
-  # task_info:
-  #   stabilization_goal: [0, -1.5, 0.5]  # Final goal (target position in x-y-z)
-  #   stabilization_goal_tolerance: 0.15
-
-  cost: rl_reward
-  task: traj_tracking
+  task: stabilization
   task_info:
-    trajectory_type: circle
-    num_cycles: 1
-    trajectory_plane: xy
-    trajectory_scale: 1.0
-    trajectory_position_offset: [0.5,0]
-    proj_point: [0, 0, 0.5]
-    proj_normal: [0, 1, 1]
+    stabilization_goal: [0, -1.5, 0.5]  # Final goal (target position in x-y-z)
+    stabilization_goal_tolerance: 0.15
+
+  # cost: rl_reward
+  # task: traj_tracking
+  # task_info:
+  #   trajectory_type: circle
+  #   num_cycles: 1
+  #   trajectory_plane: xy
+  #   trajectory_scale: 1.0
+  #   trajectory_position_offset: [0.5,0]
+  #   proj_point: [0, 0, 0.5]
+  #   proj_normal: [0, 1, 1]
 
 
   # Nominal (pre-randomization) initial state

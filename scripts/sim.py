@@ -71,13 +71,13 @@ def simulate(
     env_func = partial(make, "quadrotor", **config.quadrotor_config)
     inc_gate_obs = config.quadrotor_config["inc_gate_obs"]
     env = DroneRacingObservationWrapper(make("firmware", env_func, FIRMWARE_FREQ, CTRL_FREQ), inc_gate_obs=inc_gate_obs)
-    x_goal = create_waypoints(config.quadrotor_config)
-    env.env.X_GOAL = x_goal
-
     # Load the controller module
     path = Path(__file__).parents[1] / controller
     ctrl_class = load_controller(path)  # This returns a class, not an instance
-
+    ## This part is for assigning the goal state to environment
+    obs, info = env.env.env.reset()
+    ctrl = ctrl_class(obs, info, verbose=config.verbose)
+    env.assing_goal_state(ctrl.x_goal)
     # Create a statistics collection
     stats = {
         "ep_reward": 0,
@@ -99,7 +99,7 @@ def simulate(
         info["ctrl_freq"] = CTRL_FREQ
         lap_finished = False
         # obs = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p, q, r]
-        ctrl = ctrl_class(obs, info, verbose=config.verbose, x_goal=env.env.X_GOAL)
+        ctrl = ctrl_class(obs, info, verbose=config.verbose)
         gui_timer = p.addUserDebugText(
             "", textPosition=[0, 0, 1], physicsClientId=env.pyb_client_id
         )
