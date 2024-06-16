@@ -51,8 +51,8 @@ def create_cylinder(x, y, z, height, radius):
     return x_grid, y_grid, z_grid
 
 def point_in_gate(point, gate_center, yaw, height, buffer):
-    gate_width = 0.45 + 2 * buffer
-    gate_height = height + 0.45 / 2 + 2 * buffer
+    gate_width = 0.45 + buffer
+    gate_height = 0.45 + buffer
     rel_point = point - gate_center
 
     yaw_matrix = np.array([
@@ -63,8 +63,13 @@ def point_in_gate(point, gate_center, yaw, height, buffer):
     
     local_point = np.dot(yaw_matrix, rel_point)
 
+    print(local_point)
+    print(gate_center[2] - gate_height / 2)
+    print(point[2])
+    print((gate_center[2] - gate_height / 2) <= point[2] <= (gate_center[2] + gate_height / 2))
+
     return (-gate_width / 2 <= local_point[0] <= gate_width / 2 and
-            -gate_height / 2 <= local_point[2] <= gate_height / 2)
+            (gate_center[2] - gate_height / 2) <= point[2] <= (gate_center[2] + gate_height / 2))
 
 def line_intersects_plane(p1, p2, plane_point, plane_normal):
     line_vec = p2 - p1
@@ -135,12 +140,13 @@ def check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, i
     line_start = np.array([after_wp[0], after_wp[1], after_wp[2]])
     line_end = np.array([next_x, next_y, next_z_center])
     plane_point = np.array([x, y, z])
-    plane_normal = np.array([np.sin(yaw), -np.cos(yaw), 0])
+    plane_normal = np.array([np.cos(yaw), np.sin(yaw), 0])
 
     intersects, intersection_point = line_intersects_plane(line_start, line_end, plane_point, plane_normal)
     if intersects:
         intersection_points.append(intersection_point)
-            
+    
+    print("Checking for intersection from ", i, "with gate", i + 1, ":", intersects)
     if intersects and point_in_gate(intersection_point, np.array([x, y, z]), yaw, height, buffer):
         print(f"Gate {i} intersects with line to gate {i + 1}")
                # Calculate direction to next gate
@@ -262,6 +268,8 @@ def adjust_path(path, obstacles, buffer=0.25):
     r_squared = radius ** 2
     for x, y, z in zip(*path):
         collision = False
+        if z < 0.1:
+            z = 0.1
         for cylinder in obstacles:
             x_c, y_c, z_c, _, _, _ = cylinder
             distance_calc = (x - x_c) ** 2 + (y - y_c) ** 2
@@ -321,6 +329,6 @@ duration = 10
 CTRL_FREQ = 30
 T = np.linspace(0, 1, int(duration * CTRL_FREQ))
 
-START_POINT = [0.9339007658017658, 0.9934538571454128, 0.3]
+START_POINT = [0.9339007658017658, 0.9934538571454128, 0.1]
 
 #calc_best_path(GATES, OBSTACLES, START_POINT, T, plot=True)
