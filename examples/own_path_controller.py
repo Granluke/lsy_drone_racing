@@ -141,11 +141,11 @@ class Controller(BaseController):
 
         if not self._take_off:
             command_type = Command.TAKEOFF
-            args = [0.3, 2]  # Height, duration
+            args = [0.1, 1]  # Height, duration
             self._take_off = True  # Only send takeoff command once
         else:
-            step = iteration - 2 * self.CTRL_FREQ  # Account for 2s delay due to takeoff
-            if ep_time - 2 > 0 and step < len(self.ref_x):
+            step = iteration - 1 * self.CTRL_FREQ  # Account for 2s delay due to takeoff
+            if ep_time - 1 > 0 and step < len(self.ref_x):
                 target_pos = np.array([self.ref_x[step], self.ref_y[step], self.ref_z[step]])
                 target_vel = np.zeros(3)
                 target_acc = np.zeros(3)

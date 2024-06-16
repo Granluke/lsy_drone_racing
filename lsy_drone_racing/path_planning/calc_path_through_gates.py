@@ -91,66 +91,72 @@ def create_waypoints(gates, start_point):
     avoidance_distance = 0.15
 
     for i, gate in enumerate(gates):
-        x, y, z_center, roll, pitch, yaw, gate_type = gate
-        if gate_type == 0:
-            height = 1.0
-        else:
-            height = 0.525
-        z = height
-
-        tmp_wp_1 = [x - buffer * np.sin(yaw), y + buffer * np.cos(yaw), z]
-        tmp_wp_2 = [x + buffer * np.sin(yaw), y - buffer * np.cos(yaw), z]
-
-        prev_wp = waypoints[-1]
-        dist_tmp_wp_1 = np.linalg.norm([prev_wp[0] - tmp_wp_1[0], prev_wp[1] - tmp_wp_1[1]])
-        dist_tmp_wp_2 = np.linalg.norm([prev_wp[0] - tmp_wp_2[0], prev_wp[1] - tmp_wp_2[1]])
-
-        if dist_tmp_wp_2 < dist_tmp_wp_1:
-            after_wp = tmp_wp_1
-            before_wp = tmp_wp_2
-        else:
-            before_wp = tmp_wp_1
-            after_wp = tmp_wp_2
-        
-        waypoints.append(before_wp)
-        waypoints.append([x, y, z])
-        waypoints.append(after_wp)
-
-        before_after_points.append((before_wp, after_wp))
-        
-        # Check if the line to the next gate goes through the current gate
-        if i < len(gates) - 1:
-            next_gate = gates[i + 1]
-            next_x, next_y, next_z_center, next_roll, next_pitch, next_yaw, next_gate_type = next_gate
-            line_start = np.array([after_wp[0], after_wp[1], after_wp[2]])
-            line_end = np.array([next_x, next_y, next_z_center])
-            plane_point = np.array([x, y, z])
-            plane_normal = np.array([np.sin(yaw), -np.cos(yaw), 0])
-
-            intersects, intersection_point = line_intersects_plane(line_start, line_end, plane_point, plane_normal)
-            if intersects:
-                intersection_points.append(intersection_point)
-            
-            if intersects and point_in_gate(intersection_point, np.array([x, y, z]), yaw, height, buffer):
-                print(f"Gate {i} intersects with line to gate {i + 1}")
-               # Calculate direction to next gate
-                # Calculate direction from gate center to intersection point
-                intersection_vector = intersection_point - np.array([x, y, z_center])
-                intersection_vector /= np.linalg.norm(intersection_vector)
-
-                # Calculate the avoidance point
-                avoidance_wp = plane_point + intersection_vector * (0.45/sqrt(2) + avoidance_distance)
-
-                waypoints.append(avoidance_wp)
-                go_around_points.append((avoidance_wp))
-            else:
-                go_around_points.append(([]))
-        else:
-            go_around_points.append(([]))
+        generate_gate_waypoints(gates, waypoints, buffer, before_after_points, go_around_points, intersection_points, avoidance_distance, i, gate)
 
     return np.array(waypoints), before_after_points, go_around_points, intersection_points
 
-def plot_gates_and_cylinders(gates, cylinders, path_before_obstacle_avoidance, path_after_obstacle_avoidance, waypoints, before_after_points, go_around_points, intersection_points):
+def generate_gate_waypoints(gates, waypoints, buffer, before_after_points, go_around_points, intersection_points, avoidance_distance, i, gate):
+    x, y, z_center, roll, pitch, yaw, gate_type = gate
+    if gate_type == 0:
+        height = 1.0
+    else:
+        height = 0.525
+    z = height
+
+    tmp_wp_1 = [x - buffer * np.sin(yaw), y + buffer * np.cos(yaw), z]
+    tmp_wp_2 = [x + buffer * np.sin(yaw), y - buffer * np.cos(yaw), z]
+
+    prev_wp = waypoints[-1]
+    dist_tmp_wp_1 = np.linalg.norm([prev_wp[0] - tmp_wp_1[0], prev_wp[1] - tmp_wp_1[1]])
+    dist_tmp_wp_2 = np.linalg.norm([prev_wp[0] - tmp_wp_2[0], prev_wp[1] - tmp_wp_2[1]])
+
+    if dist_tmp_wp_2 < dist_tmp_wp_1:
+        after_wp = tmp_wp_1
+        before_wp = tmp_wp_2
+    else:
+        before_wp = tmp_wp_1
+        after_wp = tmp_wp_2
+        
+    waypoints.append(before_wp)
+    waypoints.append([x, y, z])
+    waypoints.append(after_wp)
+
+    before_after_points.append((before_wp, after_wp))
+        
+        # Check if the line to the next gate goes through the current gate
+    if i < len(gates) - 1:
+        check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, intersection_points, avoidance_distance, i, x, y, z_center, yaw, height, z, after_wp)
+    else:
+        go_around_points.append(([]))
+
+def check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, intersection_points, avoidance_distance, i, x, y, z_center, yaw, height, z, after_wp):
+    next_gate = gates[i + 1]
+    next_x, next_y, next_z_center, next_roll, next_pitch, next_yaw, next_gate_type = next_gate
+    line_start = np.array([after_wp[0], after_wp[1], after_wp[2]])
+    line_end = np.array([next_x, next_y, next_z_center])
+    plane_point = np.array([x, y, z])
+    plane_normal = np.array([np.sin(yaw), -np.cos(yaw), 0])
+
+    intersects, intersection_point = line_intersects_plane(line_start, line_end, plane_point, plane_normal)
+    if intersects:
+        intersection_points.append(intersection_point)
+            
+    if intersects and point_in_gate(intersection_point, np.array([x, y, z]), yaw, height, buffer):
+        print(f"Gate {i} intersects with line to gate {i + 1}")
+               # Calculate direction to next gate
+                # Calculate direction from gate center to intersection point
+        intersection_vector = intersection_point - np.array([x, y, z_center])
+        intersection_vector /= np.linalg.norm(intersection_vector)
+
+                # Calculate the avoidance point
+        avoidance_wp = plane_point + intersection_vector * (0.45/sqrt(2) + avoidance_distance)
+
+        waypoints.append(avoidance_wp)
+        go_around_points.append((avoidance_wp))
+    else:
+        go_around_points.append(([]))
+
+def plot_gates_and_obstacles(gates, obstacles, path_before_obstacle_avoidance, path_after_obstacle_avoidance, waypoints, before_after_points, go_around_points, intersection_points):
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
@@ -177,7 +183,7 @@ def plot_gates_and_cylinders(gates, cylinders, path_before_obstacle_avoidance, p
            # ax.scatter(*go_around_wp2, color='green', s=50)
         
     
-    for cylinder in cylinders:
+    for cylinder in obstacles:
         x, y, z, roll, pitch, yaw = cylinder
         height = obstacle_dimensions['height']
         radius = obstacle_dimensions['radius']
@@ -212,11 +218,11 @@ def plot_gates_and_cylinders(gates, cylinders, path_before_obstacle_avoidance, p
     plt.legend()
     plt.show()
 
-def check_path_collision(path, cylinders, buffer=0.25):
+def check_path_collision(path, obstacles, buffer=0.25):
     height = obstacle_dimensions['height']
     radius = obstacle_dimensions['radius']
     radius = radius + buffer
-    for cylinder in cylinders:
+    for cylinder in obstacles:
         x_c, y_c, z_c, _, _, _ = cylinder
         for p in path.T:
             x, y, z = p
@@ -225,7 +231,7 @@ def check_path_collision(path, cylinders, buffer=0.25):
                 return True
     return False
 
-def adjust_waypoints(waypoints, cylinders, buffer=0.25):
+def adjust_waypoints(waypoints, obstacles, buffer=0.25):
     extra_buffer = 0.2
     adjusted_waypoints = []
     height = obstacle_dimensions['height']
@@ -234,7 +240,7 @@ def adjust_waypoints(waypoints, cylinders, buffer=0.25):
     for waypoint in waypoints:
         x, y, z = waypoint
         collision = False
-        for cylinder in cylinders:
+        for cylinder in obstacles:
             x_c, y_c, z_c, _, _, _ = cylinder
             if (x - x_c) ** 2 + (y - y_c) ** 2 <= radius ** 2 and 0 <= z <= height:
                 collision = True
@@ -247,7 +253,7 @@ def adjust_waypoints(waypoints, cylinders, buffer=0.25):
         adjusted_waypoints.append([x, y, z])
     return np.array(adjusted_waypoints)
 
-def adjust_path(path, cylinders, buffer=0.25):
+def adjust_path(path, obstacles, buffer=0.25):
     extra_buffer = 0.42
     adjusted_path = [[], [], []]
     height = obstacle_dimensions['height']
@@ -256,7 +262,7 @@ def adjust_path(path, cylinders, buffer=0.25):
     r_squared = radius ** 2
     for x, y, z in zip(*path):
         collision = False
-        for cylinder in cylinders:
+        for cylinder in obstacles:
             x_c, y_c, z_c, _, _, _ = cylinder
             distance_calc = (x - x_c) ** 2 + (y - y_c) ** 2
             if distance_calc <= r_squared and 0 <= z <= height:
@@ -274,23 +280,23 @@ def adjust_path(path, cylinders, buffer=0.25):
     
     return np.array(adjusted_path)
 
-def calc_best_path(gates, cylinders, start_point, t, plot=True):
+def calc_best_path(gates, obstacles, start_point, t, plot=True):
     print("Starting point", start_point)
     waypoints, before_after_points, go_around_points, intersection_points = create_waypoints(gates, start_point)
     tck, u = splprep(waypoints.T, s=0)
     
     path1 = splev(t, tck)
     path = path1
-    if check_path_collision(np.array(path), cylinders):
+    if check_path_collision(np.array(path), obstacles):
         print("Path collides with obstacles, adjusting waypoints...")
-        path = adjust_path(path, cylinders)
+        path = adjust_path(path, obstacles)
         # recompute splprep and path with splev
         tck, u = splprep(path, s=0)
         path3 = splev(t, tck)
         path = path3
 
     if plot:
-        plot_gates_and_cylinders(gates, cylinders, path1, path, waypoints, before_after_points, go_around_points, intersection_points)
+        plot_gates_and_obstacles(gates, obstacles, path1, path, waypoints, before_after_points, go_around_points, intersection_points)
 
 
     return path, waypoints
