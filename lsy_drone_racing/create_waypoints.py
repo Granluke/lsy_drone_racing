@@ -61,9 +61,10 @@ def create_waypoints(initial_obs: np.ndarray, initial_info: dict):
     # Store a priori scenario information.
     NOMINAL_GATES = initial_info["nominal_gates_pos_and_type"]
     NOMINAL_OBSTACLES = initial_info["nominal_obstacles_pos"]
-
     waypoints = []
-    waypoints.append([initial_obs[0], initial_obs[1], 0.3])
+    ## Be careful with initial obs, what I get is directly from the firmware wrapper 
+    ## which has the shape, x, x_dot, y, y_dot, z, z_dot,...
+    waypoints.append([initial_obs[0], initial_obs[2], 0.3])
     gates = NOMINAL_GATES
     z_low = initial_info["gate_dimensions"]["low"]["height"]
     z_high = initial_info["gate_dimensions"]["tall"]["height"]
@@ -117,4 +118,4 @@ def create_waypoints(initial_obs: np.ndarray, initial_info: dict):
     x_goal[:,0] = ref_x
     x_goal[:,1] = ref_y
     x_goal[:,2] = ref_z
-    return x_goal
+    return x_goal, waypoints

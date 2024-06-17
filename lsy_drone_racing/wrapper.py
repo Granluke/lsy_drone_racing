@@ -156,7 +156,7 @@ class DroneRacingWrapper(Wrapper):
         self._sim_time = 0.0
         self._f_rotors[:] = 0.0
         obs, info = self.env.reset()
-        self.X_GOAL = create_waypoints(obs, info)
+        self.X_GOAL = create_waypoints(obs, info)[0]
         if self.train_random_state:
             start_ind = np.random.randint(1, self.X_GOAL.shape[0]/2)
             start_pose = self.X_GOAL[start_ind,:3]
@@ -169,6 +169,8 @@ class DroneRacingWrapper(Wrapper):
                 self.env.env.INIT_X_DOT = (next_pose[0] - start_pose[0])*30
                 self.env.env.INIT_Y_DOT = (next_pose[1] - start_pose[1])*30
                 self.env.env.INIT_Z_DOT = (next_pose[2] - start_pose[2])*30
+        ## Reset again to change the env to the initial state
+        obs, info = self.env.reset()
         # env.reset() cannot reset in the exact position, which leads to a mismatch.
         self.X_GOAL_crop[0,:3] = obs[:6:2]
         # Store obstacle height for observation expansion during env steps.
@@ -381,9 +383,6 @@ class DroneRacingObservationWrapper:
         self.obs_goal_horizon = self.env.env.obs_goal_horizon
         self._wrap_ctr_step = None
         self.inc_gate_obs = inc_gate_obs
-
-    def assing_goal_state(self, X_GOAL: np.ndarray) -> None:
-        self.X_GOAL = deepcopy(X_GOAL)
     
     def __getattribute__(self, name: str) -> Any:
         """Get an attribute from the object.
@@ -412,6 +411,8 @@ class DroneRacingObservationWrapper:
             The transformed observation and the info dict.
         """
         obs, info = self.env.reset(*args, **kwargs)
+        # Just need waypoints for drawing trajectory
+        self.X_GOAL, self.waypoints = create_waypoints(obs, info)
         if self.obs_goal_horizon > 0:
             self._wrap_ctr_step = 0
             obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)

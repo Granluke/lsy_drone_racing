@@ -74,10 +74,6 @@ def simulate(
     # Load the controller module
     path = Path(__file__).parents[1] / controller
     ctrl_class = load_controller(path)  # This returns a class, not an instance
-    ## This part is for assigning the goal state to environment
-    obs, info = env.env.env.reset()
-    ctrl = ctrl_class(obs, info, verbose=config.verbose)
-    env.assing_goal_state(ctrl.x_goal)
     # Create a statistics collection
     stats = {
         "ep_reward": 0,
@@ -99,7 +95,7 @@ def simulate(
         info["ctrl_freq"] = CTRL_FREQ
         lap_finished = False
         # obs = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p, q, r]
-        ctrl = ctrl_class(obs, info, verbose=config.verbose)
+        ctrl = ctrl_class(obs, info, verbose=config.verbose, X_GOAL=env.X_GOAL, waypoints=env.waypoints)
         gui_timer = p.addUserDebugText(
             "", textPosition=[0, 0, 1], physicsClientId=env.pyb_client_id
         )
