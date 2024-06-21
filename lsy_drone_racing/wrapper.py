@@ -109,8 +109,9 @@ class DroneRacingWrapper(Wrapper):
         ## Add Goal States to Observation Space
         self.obs_goal_horizon = self.env.env.obs_goal_horizon
         if self.obs_goal_horizon > 0:
-            temp_h = np.array(drone_limits*self.obs_goal_horizon)
-            temp_l = -np.array(drone_limits*self.obs_goal_horizon)
+            traj_limits = [5, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            temp_h = np.array(traj_limits*self.obs_goal_horizon)
+            temp_l = -np.array(traj_limits*self.obs_goal_horizon)
             obs_limits_high = np.concatenate((obs_limits_high, temp_h), axis=0)
             obs_limits_low = np.concatenate((obs_limits_low, temp_l), axis=0)
         self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
@@ -161,14 +162,16 @@ class DroneRacingWrapper(Wrapper):
             start_ind = np.random.randint(1, self.X_GOAL.shape[0]/2)
             start_pose = self.X_GOAL[start_ind,:3]
             self.X_GOAL_crop = self.X_GOAL[start_ind:,:]
-            self.env.env.INIT_X = start_pose[0]
+            self.env.env.INIT_X = start_pose[0] + 0.05 # Manual adjustment
             self.env.env.INIT_Y = start_pose[1]
             self.env.env.INIT_Z = start_pose[2]
-            if start_ind > self.X_GOAL.shape[0]/4:
+            if start_ind > self.X_GOAL.shape[0]/4 and False:
                 next_pose = self.X_GOAL[start_ind+1,:3]
                 self.env.env.INIT_X_DOT = (next_pose[0] - start_pose[0])*30
                 self.env.env.INIT_Y_DOT = (next_pose[1] - start_pose[1])*30
                 self.env.env.INIT_Z_DOT = (next_pose[2] - start_pose[2])*30
+        else:
+            self.X_GOAL_crop = deepcopy(self.X_GOAL)
         ## Reset again to change the env to the initial state
         obs, info = self.env.reset()
         # env.reset() cannot reset in the exact position, which leads to a mismatch.
@@ -183,6 +186,8 @@ class DroneRacingWrapper(Wrapper):
             raise NotImplementedError
             obs = self.observation_transform(obs, info).astype(np.float32)
         self._drone_pose = obs[[0, 1, 2, 5]]
+        # print(f'Reset Position: {obs[:3]}')
+        # print(f'Reset Goal Position: {obs[12:15]}')
         return obs, info
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
@@ -238,6 +243,8 @@ class DroneRacingWrapper(Wrapper):
             terminated = True
             reward = -1
         self._reset_required = terminated or truncated
+        # print(f'Step Position: {obs[:3]}')
+        # print(f'Step Goal Position: {obs[12:15]}')
         return obs, reward, terminated, truncated, info
 
     def _action_transform(self, action: np.ndarray) -> np.ndarray:
@@ -303,7 +310,7 @@ class DroneRacingWrapper(Wrapper):
                 ]
             )
         if obs_goal_horizon > 0:
-            wp_idx = [min(crnt_step + i, X_GOAL.shape[0]-1) 
+            wp_idx = [min(crnt_step + 1 + i, X_GOAL.shape[0]-1) 
                     for i in range(obs_goal_horizon)]
             goal_state = X_GOAL[wp_idx].flatten()
             obs = np.concatenate([obs, goal_state])
@@ -335,17 +342,17 @@ class DroneRacingWrapper(Wrapper):
             dist = np.sum(np.linalg.norm(drone_pos - goal_pos, axis=0))
             reward += np.exp(-dist)
         else:
-            dist = np.sum(np.linalg.norm(drone_pos - goal_pos, axis=0))
-            rew_std = 0.001
+            dist = np.linalg.norm(drone_pos[None,:] - goal_pos_all, axis=1)
+            disc_factor = [0.6**i for i in range(self.obs_goal_horizon)]
+            dist = np.sum(dist*disc_factor)
+            rew_std = 0.1
             reward += np.exp(-(dist**2)/(rew_std**2))
         ## Enforce Progress
         if self._wrap_ctr_step >= 1:
             goal_pos_last_old = goal_pos_all[-2,:]
             wrap_dist_old = np.linalg.norm(drone_pos - goal_pos_last_old, axis=0)
-            if wrap_dist_old < self._wrap_dist:
-                reward += 0.5
-            else:
-                reward -= 0.5
+            reward += 10*(self._wrap_dist - wrap_dist_old)
+            ## UPdate Distance
             goal_pos_last = goal_pos_all[-1,:]
             self._wrap_dist = np.linalg.norm(drone_pos - goal_pos_last, axis=0)
         ## Crash Penality

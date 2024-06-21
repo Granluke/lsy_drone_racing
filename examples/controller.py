@@ -86,7 +86,7 @@ class Controller(BaseController):
         # REPLACE THIS (START) ##
         #########################
         if X_GOAL is not None and waypoints is not None:
-            self.agent = PPO.load("./models/ppo_gaus_random3.zip")
+            self.agent = PPO.load("./models/ppo_gaus_obs_up1.zip")
             self.action_scale = np.array([1, 1, 1, np.pi])
             self.X_GOAL = X_GOAL
             self.waypoints = waypoints

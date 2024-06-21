@@ -32,7 +32,7 @@ from lsy_drone_racing.wrapper import DroneRacingWrapper, MultiProcessingWrapper
 logger = logging.getLogger(__name__)
 
 
-def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
+def create_race_env(config_path: Path, gui: bool = False, random_train=False) -> DroneRacingWrapper:
     """Utility function for multiprocessed env."""
     
     """Create the drone racing environment."""
@@ -53,7 +53,7 @@ def create_race_env(config_path: Path, gui: bool = False) -> DroneRacingWrapper:
     # x,dx,y,dy,z,dz,phi,theta,psi,p,q,r
     # We need to define something for the missing states since we only have x,y,z
     # Obey the order of the states
-    return DroneRacingWrapper(firmware_env, terminate_on_lap=True, train_random_state=True, inc_gate_obs=inc_gate_obs)
+    return DroneRacingWrapper(firmware_env, terminate_on_lap=True, train_random_state=random_train, inc_gate_obs=inc_gate_obs)
 
 
 def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
@@ -68,30 +68,30 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     EVAL_EPS = 5 # Number of episodes for evaluation
     ALGO = PPO
     n_steps = 2**11
-    batch_size = n_steps * PROCESSES_TO_TEST // 2
+    batch_size = n_steps // 2**3
     ## Create Environments
-    load_model = False
+    load_model = True
     if_validate = True
-    train_env = create_race_env(config_path=config_path, gui=gui)
+    train_env = create_race_env(config_path=config_path, gui=gui, random_train=False)
     check_env(train_env)
     if PROCESSES_TO_TEST > 1:
         train_env = MultiProcessingWrapper(train_env)
         vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui)),
                                      n_envs=PROCESSES_TO_TEST, vec_env_cls=SubprocVecEnv)
         train_env = vec_train_env
-    k = 1 # The learning iteration
-    save_path = './models/'
-    save_name = './ppo_gaus_random' + str(k)
+    k = 2 # The learning iteration
+    save_path = './models'
+    save_name = '/ppo_gaus_obs_up' + str(k)
     load_path = save_path
-    load_name = './ppo_gaus_random' + str(k-1) + '.zip'
-    tb_log_name = './PPO_GREW_' + str(k)
-    checkpoint_callback = CheckpointCallback(save_freq=2**11, save_path=save_path+save_name,
+    load_name = '/ppo_gaus_obs_up' + str(k-1) + '.zip'
+    tb_log_name = './PPO_OBS_UP' + str(k)
+    checkpoint_callback = CheckpointCallback(save_freq=2**12, save_path=save_path+save_name,
                                          name_prefix='rl_model')
     if if_validate:
         eval_env = create_race_env(config_path=config_path, gui=gui)
         check_env(eval_env)
         eval_callback = EvalCallback(eval_env, best_model_save_path=save_path+save_name+'_best',
-                                 log_path='./logs/', eval_freq=2**14, deterministic=True, render=False)
+                                 log_path='./logs/', eval_freq=2**15, deterministic=True, render=False)
     callback_list = [checkpoint_callback, eval_callback] if if_validate else [checkpoint_callback]
     callback_list = CallbackList(callback_list)
     for experiment in range(NUM_EXPERIMENTS):
@@ -99,11 +99,13 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
         if not load_model:
             print(f'Creating model...')
             model = ALGO("MlpPolicy", train_env, verbose=1, tensorboard_log="./logs", n_steps=n_steps,
-                        learning_rate=0.0003, ent_coef=0.01, device='auto', n_epochs=10, batch_size=batch_size,
-                        clip_range=0.1, gae_lambda=0.95)
+                        learning_rate=0.0003, ent_coef=0.00, device='auto', n_epochs=10, batch_size=batch_size,
+                        clip_range=0.15, gae_lambda=0.95)
         else:
             print(f'Loading model from {load_path+load_name}')
             model = ALGO.load(load_path+load_name, env=train_env)
+            model.ent_coef = 0.01
+            model.clip_range = 0.2
         print(f'Starting experiment...')
         print(f'Log Name: {tb_log_name}')
         model.learn(total_timesteps=TRAIN_STEPS, progress_bar=True, tb_log_name=tb_log_name, callback=callback_list)
