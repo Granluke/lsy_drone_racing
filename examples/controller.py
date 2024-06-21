@@ -86,11 +86,14 @@ class Controller(BaseController):
         # REPLACE THIS (START) ##
         #########################
         if X_GOAL is not None and waypoints is not None:
-            self.agent = PPO.load("./models/ppo_gaus_obs_up1.zip")
-            self.action_scale = np.array([1, 1, 1, np.pi])
+            self.agent = PPO.load("./models/ppo_gaus_obs_up2.zip")
+            self.action_scale = np.array([5, 5, 5, np.pi])
             self.X_GOAL = X_GOAL
             self.waypoints = waypoints
             self.RL = True
+            self.ref_x = self.X_GOAL[:, 0]
+            self.ref_y = self.X_GOAL[:, 1]  
+            self.ref_z = self.X_GOAL[:, 2]  
         # Example: Hard-code waypoints through the gates. Obviously this is a crude way of
         # completing the challenge that is highly susceptible to noise and does not generalize at
         # all. It is meant solely as an example on how the drones can be controlled
@@ -152,9 +155,6 @@ class Controller(BaseController):
         self._take_off = False
         self._setpoint_land = False
         self._land = False
-        self.ref_x = self.X_GOAL[:, 0]
-        self.ref_y = self.X_GOAL[:, 1]
-        self.ref_z = self.X_GOAL[:, 2]
         
         if self.VERBOSE:
             # Draw the trajectory on PyBullet's GUI.

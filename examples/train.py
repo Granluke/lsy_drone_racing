@@ -67,7 +67,7 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     TRAIN_STEPS = 2**18  # Number of training steps
     EVAL_EPS = 5 # Number of episodes for evaluation
     ALGO = PPO
-    n_steps = 2**11
+    n_steps = 2**10
     batch_size = n_steps // 2**3
     ## Create Environments
     load_model = True
@@ -79,19 +79,19 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
         vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui)),
                                      n_envs=PROCESSES_TO_TEST, vec_env_cls=SubprocVecEnv)
         train_env = vec_train_env
-    k = 2 # The learning iteration
+    k = 3 # The learning iteration
     save_path = './models'
     save_name = '/ppo_gaus_obs_up' + str(k)
     load_path = save_path
     load_name = '/ppo_gaus_obs_up' + str(k-1) + '.zip'
     tb_log_name = './PPO_OBS_UP' + str(k)
-    checkpoint_callback = CheckpointCallback(save_freq=2**12, save_path=save_path+save_name,
+    checkpoint_callback = CheckpointCallback(save_freq=2**15, save_path=save_path+save_name,
                                          name_prefix='rl_model')
     if if_validate:
         eval_env = create_race_env(config_path=config_path, gui=gui)
         check_env(eval_env)
         eval_callback = EvalCallback(eval_env, best_model_save_path=save_path+save_name+'_best',
-                                 log_path='./logs/', eval_freq=2**15, deterministic=True, render=False)
+                                 log_path='./logs/', eval_freq=2**14, deterministic=True, render=False)
     callback_list = [checkpoint_callback, eval_callback] if if_validate else [checkpoint_callback]
     callback_list = CallbackList(callback_list)
     for experiment in range(NUM_EXPERIMENTS):
@@ -105,7 +105,8 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
             print(f'Loading model from {load_path+load_name}')
             model = ALGO.load(load_path+load_name, env=train_env)
             model.ent_coef = 0.01
-            model.clip_range = 0.2
+            from stable_baselines3.common.utils import get_schedule_fn
+            model.clip_range = get_schedule_fn(0.2)
         print(f'Starting experiment...')
         print(f'Log Name: {tb_log_name}')
         model.learn(total_timesteps=TRAIN_STEPS, progress_bar=True, tb_log_name=tb_log_name, callback=callback_list)

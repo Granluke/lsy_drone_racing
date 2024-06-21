@@ -180,8 +180,8 @@ class DroneRacingWrapper(Wrapper):
         if self.obs_goal_horizon > 0:
             self._wrap_ctr_step = 0
             obs = self.observation_transform(obs, info, self.X_GOAL_crop, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
-            goal_pos_last = obs[-12:]
-            self._wrap_dist = np.linalg.norm(obs[:3] - goal_pos_last[:3], axis=0)
+            self.goal_pos = obs[-12:]
+            self._wrap_dist = np.linalg.norm(obs[:3] - self.goal_pos[:3], axis=0)
         else:
             raise NotImplementedError
             obs = self.observation_transform(obs, info).astype(np.float32)
@@ -285,7 +285,7 @@ class DroneRacingWrapper(Wrapper):
         drone_pos = obs[0:6:2]
         drone_vel = obs[1:6:2]
         drone_rpy = obs[6:9]
-        drone_ang_vel = obs[8:11]
+        drone_ang_vel = obs[9:11]
         if inc_gate_obs:
             obs = np.concatenate(
                 [
@@ -337,24 +337,26 @@ class DroneRacingWrapper(Wrapper):
         goal_x, goal_y, goal_z = goal_state[:, 0], goal_state[:, 1], goal_state[:, 2]
         goal_pos_all = np.array([goal_x, goal_y, goal_z]).T
         # Don't know if it is necessary to enforce closeness to the whole horizon
-        goal_pos = goal_pos_all[0,:]
         if False:
+            goal_pos = goal_pos_all[0,:]
             dist = np.sum(np.linalg.norm(drone_pos - goal_pos, axis=0))
             reward += np.exp(-dist)
         else:
             dist = np.linalg.norm(drone_pos[None,:] - goal_pos_all, axis=1)
             disc_factor = [0.6**i for i in range(self.obs_goal_horizon)]
             dist = np.sum(dist*disc_factor)
-            rew_std = 0.1
+            rew_std = 0.01
             reward += np.exp(-(dist**2)/(rew_std**2))
         ## Enforce Progress
         if self._wrap_ctr_step >= 1:
-            goal_pos_last_old = goal_pos_all[-2,:]
-            wrap_dist_old = np.linalg.norm(drone_pos - goal_pos_last_old, axis=0)
-            reward += 10*(self._wrap_dist - wrap_dist_old)
+            goal_pos_old = goal_pos_all[-2,:] # Previous Goal Position
+            dist_old = np.linalg.norm(drone_pos - goal_pos_old, axis=0) # Distance to previous goal
+            # self._wrap_dist is the distance to goal in previous iteration
+            reward += (self._wrap_dist - dist_old) # Progress Reward
+            print(f'Progress Reward: {self._wrap_dist - dist_old}')
             ## UPdate Distance
-            goal_pos_last = goal_pos_all[-1,:]
-            self._wrap_dist = np.linalg.norm(drone_pos - goal_pos_last, axis=0)
+            self.goal_pos = goal_pos_all[-1,:]
+            self._wrap_dist = np.linalg.norm(drone_pos - self.goal_pos, axis=0)
         ## Crash Penality
         crash_penality = -1 if self.env.env.currently_collided else 0
         ## Constraint Violation Penality
@@ -423,6 +425,8 @@ class DroneRacingObservationWrapper:
         if self.obs_goal_horizon > 0:
             self._wrap_ctr_step = 0
             obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
+            self.goal_pos = obs[-12:]
+            self._wrap_dist = np.linalg.norm(obs[:3] - self.goal_pos[:3], axis=0)
         else:
             raise NotImplementedError
             obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)
@@ -444,6 +448,14 @@ class DroneRacingObservationWrapper:
         if self.obs_goal_horizon > 0:
             self._wrap_ctr_step += 1
             obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
+            print(f'Old Goal Position: {self.goal_pos}')
+            print(f'Obs -2: {obs[-24:-12]}')
+            print(f'Previous Distance: {self._wrap_dist}')
+            print(f'Current Distance: {np.linalg.norm(obs[:3] - obs[-24:-21], axis=0)}')
+            print(f'New Goal Position: {obs[-12:]}')
+            print(f'New Distance: {np.linalg.norm(obs[:3] - obs[-12:-9], axis=0)}')
+            self.goal_pos = obs[-12:]
+            self._wrap_dist = np.linalg.norm(obs[:3] - self.goal_pos[:3], axis=0)
         else:
             raise NotImplementedError
             obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)

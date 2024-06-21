@@ -96,6 +96,7 @@ def simulate(
         lap_finished = False
         # obs = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p, q, r]
         ctrl = ctrl_class(obs, info, verbose=config.verbose, X_GOAL=env.X_GOAL, waypoints=env.waypoints)
+        # ctrl = ctrl_class(obs, info, verbose=config.verbose)
         gui_timer = p.addUserDebugText(
             "", textPosition=[0, 0, 1], physicsClientId=env.pyb_client_id
         )
