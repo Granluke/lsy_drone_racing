@@ -285,7 +285,7 @@ class DroneRacingWrapper(Wrapper):
         drone_pos = obs[0:6:2]
         drone_vel = obs[1:6:2]
         drone_rpy = obs[6:9]
-        drone_ang_vel = obs[9:11]
+        drone_ang_vel = obs[9:12]
         if inc_gate_obs:
             obs = np.concatenate(
                 [
