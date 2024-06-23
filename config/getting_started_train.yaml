@@ -19,7 +19,7 @@ quadrotor_config:
   obs_goal_horizon: 5 # Number of steps to look ahead for the goal in the observation
   inc_gate_obs: False # Whether to include the gate observation
 
-  done_on_violation: False # Whether `done` becomes True when a constraint is violated
+  done_on_violation: True # Whether `done` becomes True when a constraint is violated
   done_on_completion: False # Whether `done` becomes True when the task is completed (traveled all gates and 2'' hover at stabilization_goal)
   done_on_collision: True # Whether `done` becomes True when a collision happens
   # cost: competition  # Sparse reward function, if you desire, re-implement it in Quadrotor._get_reward()

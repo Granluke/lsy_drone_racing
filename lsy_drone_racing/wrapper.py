@@ -157,7 +157,7 @@ class DroneRacingWrapper(Wrapper):
         self._sim_time = 0.0
         self._f_rotors[:] = 0.0
         obs, info = self.env.reset()
-        self.X_GOAL = create_waypoints(obs, info)[0]
+        self.X_GOAL = create_waypoints(obs, info, self.env.ctrl_freq)[0]
         if self.train_random_state:
             start_ind = np.random.randint(1, self.X_GOAL.shape[0]/2)
             start_pose = self.X_GOAL[start_ind,:3]
@@ -341,12 +341,17 @@ class DroneRacingWrapper(Wrapper):
             goal_pos = goal_pos_all[0,:]
             dist = np.sum(np.linalg.norm(drone_pos - goal_pos, axis=0))
             reward += np.exp(-dist)
-        else:
+        elif False:
             dist = np.linalg.norm(drone_pos[None,:] - goal_pos_all, axis=1)
-            disc_factor = [0.6**i for i in range(self.obs_goal_horizon)]
+            disc_factor = [0.99**i for i in range(self.obs_goal_horizon)]
             dist = np.sum(dist*disc_factor)
             rew_std = 0.01
             reward += np.exp(-1/2*(dist**2)/(rew_std**2))
+        else:
+            x_diff = drone_pos[0] - goal_x[0]
+            y_diff = drone_pos[1] - goal_y[0]
+            z_diff = drone_pos[2] - goal_z[0]
+            reward += np.exp(-x_diff**2) + np.exp(-y_diff**2) + np.exp(-z_diff**2)
         ## Enforce Progress
         # if self._wrap_ctr_step >= 1:
         #     goal_pos_old = goal_pos_all[-2,:] # Previous Goal Position
@@ -358,12 +363,13 @@ class DroneRacingWrapper(Wrapper):
         #     self.goal_pos = goal_pos_all[-1,:]
         #     self._wrap_dist = np.linalg.norm(drone_pos - self.goal_pos, axis=0)
         ## Crash Penality
-        crash_penality = -1 if self.env.env.currently_collided else 0
+        crash_penality = -5 if self.env.env.currently_collided else 0
         ## Constraint Violation Penality
-        cstr_penalty = -1 if self.env.env.cnstr_violation else 0
-        print(f'Constraint Violated') if cstr_penalty == -1 else None
+        cstr_penalty = -5 if self.env.env.cnstr_violation else 0
+        print(f'Constraint Violated! Postion: {obs[:3]}') if cstr_penalty == -1 else None
         ## Gate Passing Reward
         gate_rew = 1 if self.env.env.stepped_through_gate else 0
+        print(f'Gate Passed! Postion: {obs[:3]}') if gate_rew == 1 else None
         return reward+crash_penality+cstr_penalty+gate_rew
 
         
@@ -390,6 +396,7 @@ class DroneRacingObservationWrapper:
         self.env = env
         self.pyb_client_id: int = env.env.PYB_CLIENT
         self.X_GOAL = None
+        self.waypoints = None
         self.obs_goal_horizon = self.env.env.obs_goal_horizon
         self._wrap_ctr_step = None
         self.inc_gate_obs = inc_gate_obs
@@ -422,7 +429,7 @@ class DroneRacingObservationWrapper:
         """
         obs, info = self.env.reset(*args, **kwargs)
         # Just need waypoints for drawing trajectory
-        self.X_GOAL, self.waypoints = create_waypoints(obs, info)
+        self.X_GOAL, self.waypoints = create_waypoints(obs, info, self.env.ctrl_freq)
         if self.obs_goal_horizon > 0:
             self._wrap_ctr_step = 0
             obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
@@ -463,10 +470,10 @@ class DroneRacingObservationWrapper:
             obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)
         return obs, reward, done, info, action
 
-
 class ActionWrapper(ActionWrapper):
     def __init__(self, env):
         super().__init__(env)
+        self.env = env
         self.current_obs = None
 
     def reset(self, **kwargs):
@@ -485,7 +492,7 @@ class ActionWrapper(ActionWrapper):
         current_pose = obs[:3]
         goal_pose = obs[12:15]
         action_traj = goal_pose - current_pose
-        action = action + action_traj
+        action[:3] = action[:3] + action_traj
         check_mask1 = action > 1
         check_mask2 = action < -1
         if check_mask1.any():
@@ -525,7 +532,6 @@ class MultiProcessingWrapper(Wrapper):
         info.pop("symbolic_model", None)
         info.pop("symbolic_constraints", None)
         return info
-
 
 class RewardWrapper(Wrapper):
     """Wrapper to alter the default reward function from the environment for RL training."""

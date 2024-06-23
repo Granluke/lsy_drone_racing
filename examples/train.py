@@ -73,14 +73,14 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     ## Create Environments
     load_model = True
     if_validate = True
-    train_env = create_race_env(config_path=config_path, gui=gui, random_train=True)
+    train_env = create_race_env(config_path=config_path, gui=gui, random_train=False)
     check_env(train_env)
     if PROCESSES_TO_TEST > 1:
         train_env = MultiProcessingWrapper(train_env)
         vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui)),
                                      n_envs=PROCESSES_TO_TEST, vec_env_cls=SubprocVecEnv)
         train_env = vec_train_env
-    k = 1 # The learning iteration
+    k = 2 # The learning iteration
     save_path = './models'
     save_name = '/ppo_gaus_act_comp' + str(k)
     load_path = save_path

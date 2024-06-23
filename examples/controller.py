@@ -85,9 +85,10 @@ class Controller(BaseController):
         #########################
         # REPLACE THIS (START) ##
         #########################
+        self.iter_counter = 0
         if X_GOAL is not None and waypoints is not None:
-            self.agent = PPO.load("./models/ppo_gaus_actwrap1.zip")
-            self.action_scale = np.array([5, 5, 5, np.pi])
+            self.agent = PPO.load("./models/ppo_gaus_act_comp1.zip")
+            self.action_scale = np.array([1, 1, 1, np.pi])
             self.X_GOAL = X_GOAL
             self.waypoints = waypoints
             self.RL = True
@@ -223,11 +224,18 @@ class Controller(BaseController):
                     target_yaw = 0.0
                     target_rpy_rates = np.zeros(3)
                     args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
+                    print(f'Next Position: {target_pos}')
                 else:
+                    self.iter_counter += 1
                     action, _states = self.agent.predict(observation=obs)
                     action = self.action_scale * action
-                    pos = obs[0:3] + action[:3]
-                    yaw = map2pi(action[-1])
+                    # Adding the first point in the horizon
+                    pos = self.action_scale[:-1] * obs[12:15]
+                    yaw = 0.0
+                    # print(f'Obs Next Goal: {obs[12:15]}')
+                    # print(f'X_GOAL: {self.X_GOAL[self.iter_counter,:3]}')
+                    # pos = obs[12:15] + action[:3]
+                    # yaw = 0.0
                     args = [pos, np.zeros(3), np.zeros(3), yaw, np.zeros(3), ep_time]
             # Notify set point stop has to be called every time we transition from low-level
             # commands to high-level ones. Prepares for landing
