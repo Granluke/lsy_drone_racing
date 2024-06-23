@@ -71,7 +71,7 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     n_steps = 2**10
     batch_size = n_steps // 2**3
     ## Create Environments
-    load_model = True
+    load_model = False
     if_validate = True
     train_env = create_race_env(config_path=config_path, gui=gui, random_train=False)
     check_env(train_env)
@@ -84,7 +84,7 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     save_path = './models'
     save_name = '/ppo_gaus_act_comp' + str(k)
     load_path = save_path
-    load_name = '/ppo_gaus_obs_up' + str(k-1) + '.zip'
+    load_name = '/ppo_gaus_act_comp' + str(k-1) + '.zip'
     tb_log_name = './PPO_ACT_COMP' + str(k)
     checkpoint_callback = CheckpointCallback(save_freq=2**15, save_path=save_path+save_name,
                                          name_prefix='rl_model')
@@ -100,8 +100,8 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
         if not load_model:
             print(f'Creating model...')
             model = ALGO("MlpPolicy", train_env, verbose=1, tensorboard_log="./logs", n_steps=n_steps,
-                        learning_rate=0.0003, ent_coef=0.00, device='auto', n_epochs=10, batch_size=batch_size,
-                        clip_range=0.15, gae_lambda=0.95)
+                        learning_rate=0.0003, ent_coef=0.01, device='auto', n_epochs=10, batch_size=batch_size,
+                        clip_range=0.2, gae_lambda=0.95)
         else:
             print(f'Loading model from {load_path+load_name}')
             model = ALGO.load(load_path+load_name, env=train_env)

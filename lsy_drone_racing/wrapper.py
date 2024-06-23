@@ -71,7 +71,15 @@ class DroneRacingWrapper(Wrapper):
         # All values are scaled to [-1, 1]. Transformed back, x, y, z values of 1 correspond to 5m.
         # The yaw value of 1 corresponds to pi radians.
         self.action_scale = np.array([1, 1, 1, np.pi])
-        self.action_space = Box(-1, 1, shape=(4,), dtype=np.float32)
+        self.learned_action_scale = 0.4
+        self.fixed_action_scale = 1 - self.learned_action_scale
+        print(f'Fixed Action Scale: {self.fixed_action_scale}')
+        print(f'Learned Action Scale: {self.learned_action_scale}')
+        act_low = np.array([-1, -1, -1, -1])
+        scale = np.ones(4)
+        scale[:3] *= self.learned_action_scale
+        self.action_space = Box(act_low*scale, -act_low*scale, dtype=np.float32)
+        self.action_space_total = Box(-1, 1, shape=(4,), dtype=np.float32)
 
         # Observation space:
         # [drone_xyz, drone_rpy, drone_vxyz, drone vrpy, gates_xyz_yaw, gates_in_range,
@@ -175,7 +183,6 @@ class DroneRacingWrapper(Wrapper):
         ## Reset again to change the env to the initial state
         obs, info = self.env.reset()
         # env.reset() cannot reset in the exact position, which leads to a mismatch.
-        self.X_GOAL_crop[0,:3] = obs[:6:2]
         # Store obstacle height for observation expansion during env steps.
         if self.obs_goal_horizon > 0:
             self._wrap_ctr_step = 0
@@ -200,7 +207,7 @@ class DroneRacingWrapper(Wrapper):
             The next observation, the reward, the terminated and truncated flags, and the info dict.
         """
         assert not self._reset_required, "Environment must be reset before taking a step"
-        if action not in self.action_space:
+        if action not in self.action_space_total:
             # Wrapper has a reduced action space compared to the firmware env to make it compatible
             # with the gymnasium interface and popular RL libraries.
             raise InvalidAction(f"Invalid action: {action}")
@@ -341,17 +348,21 @@ class DroneRacingWrapper(Wrapper):
             goal_pos = goal_pos_all[0,:]
             dist = np.sum(np.linalg.norm(drone_pos - goal_pos, axis=0))
             reward += np.exp(-dist)
-        elif False:
+        elif True:
             dist = np.linalg.norm(drone_pos[None,:] - goal_pos_all, axis=1)
             disc_factor = [0.99**i for i in range(self.obs_goal_horizon)]
-            dist = np.sum(dist*disc_factor)
-            rew_std = 0.01
-            reward += np.exp(-1/2*(dist**2)/(rew_std**2))
+            rew_std = [0.1*i/2 for i in range(1,self.obs_goal_horizon+1)]
+            reward += np.exp(-1/2*(dist/rew_std)**2).dot(disc_factor)
+            # print(f'Reward: {reward}')
         else:
+            # print(f'Drone Position: {drone_pos}')
+            # print(f'Goal Position: {goal_pos_all[0,:]}')
             x_diff = drone_pos[0] - goal_x[0]
             y_diff = drone_pos[1] - goal_y[0]
             z_diff = drone_pos[2] - goal_z[0]
-            reward += np.exp(-x_diff**2) + np.exp(-y_diff**2) + np.exp(-z_diff**2)
+            weights = [0.9, 0.9, 1.2]
+            reward += (weights[0]*np.exp(-x_diff**2) + weights[1]*np.exp(-y_diff**2) + weights[2]*np.exp(-z_diff**2))/sum(weights)
+            # print(f'Reward: {reward}')
         ## Enforce Progress
         # if self._wrap_ctr_step >= 1:
         #     goal_pos_old = goal_pos_all[-2,:] # Previous Goal Position
@@ -363,13 +374,14 @@ class DroneRacingWrapper(Wrapper):
         #     self.goal_pos = goal_pos_all[-1,:]
         #     self._wrap_dist = np.linalg.norm(drone_pos - self.goal_pos, axis=0)
         ## Crash Penality
-        crash_penality = -5 if self.env.env.currently_collided else 0
+        crash_penality = -1000 if self.env.env.currently_collided else 0
+        # print(f'Crashed! Postion: {obs[:3]}') if crash_penality != 0 else None
         ## Constraint Violation Penality
-        cstr_penalty = -5 if self.env.env.cnstr_violation else 0
-        print(f'Constraint Violated! Postion: {obs[:3]}') if cstr_penalty == -1 else None
+        cstr_penalty = -1000 if self.env.env.cnstr_violation else 0
+        # print(f'Constraint Violated! Postion: {obs[:3]}') if cstr_penalty != 0 else None
         ## Gate Passing Reward
-        gate_rew = 1 if self.env.env.stepped_through_gate else 0
-        print(f'Gate Passed! Postion: {obs[:3]}') if gate_rew == 1 else None
+        gate_rew = 250 if self.env.env.stepped_through_gate else 0
+        print(f'Gate Passed! Postion: {obs[:3]}') if gate_rew != 0 else None
         return reward+crash_penality+cstr_penalty+gate_rew
 
         
@@ -473,7 +485,9 @@ class DroneRacingObservationWrapper:
 class ActionWrapper(ActionWrapper):
     def __init__(self, env):
         super().__init__(env)
-        self.env = env
+        # self.env = env
+        self.fas = env.fixed_action_scale
+        self.las = env.learned_action_scale
         self.current_obs = None
 
     def reset(self, **kwargs):
@@ -492,7 +506,9 @@ class ActionWrapper(ActionWrapper):
         current_pose = obs[:3]
         goal_pose = obs[12:15]
         action_traj = goal_pose - current_pose
-        action[:3] = action[:3] + action_traj
+        action[:3] = self.las * action[:3] + self.fas * action_traj
+        # action[:3] = action_traj
+        action[3] = 0
         check_mask1 = action > 1
         check_mask2 = action < -1
         if check_mask1.any():
