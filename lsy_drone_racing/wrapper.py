@@ -23,7 +23,7 @@ import logging
 from typing import Any
 
 import numpy as np
-from gymnasium import Env, Wrapper
+from gymnasium import Env, Wrapper, ActionWrapper
 from gymnasium.error import InvalidAction
 from gymnasium.spaces import Box
 from safe_control_gym.controllers.firmware.firmware_wrapper import FirmwareWrapper
@@ -346,21 +346,22 @@ class DroneRacingWrapper(Wrapper):
             disc_factor = [0.6**i for i in range(self.obs_goal_horizon)]
             dist = np.sum(dist*disc_factor)
             rew_std = 0.01
-            reward += np.exp(-(dist**2)/(rew_std**2))
+            reward += np.exp(-1/2*(dist**2)/(rew_std**2))
         ## Enforce Progress
-        if self._wrap_ctr_step >= 1:
-            goal_pos_old = goal_pos_all[-2,:] # Previous Goal Position
-            dist_old = np.linalg.norm(drone_pos - goal_pos_old, axis=0) # Distance to previous goal
-            # self._wrap_dist is the distance to goal in previous iteration
-            reward += (self._wrap_dist - dist_old) # Progress Reward
-            print(f'Progress Reward: {self._wrap_dist - dist_old}')
-            ## UPdate Distance
-            self.goal_pos = goal_pos_all[-1,:]
-            self._wrap_dist = np.linalg.norm(drone_pos - self.goal_pos, axis=0)
+        # if self._wrap_ctr_step >= 1:
+        #     goal_pos_old = goal_pos_all[-2,:] # Previous Goal Position
+        #     dist_old = np.linalg.norm(drone_pos - goal_pos_old, axis=0) # Distance to previous goal
+        #     # self._wrap_dist is the distance to goal in previous iteration
+        #     reward += (self._wrap_dist - dist_old) # Progress Reward
+        #     # print(f'Progress Reward: {self._wrap_dist - dist_old}')
+        #     ## Update Distance
+        #     self.goal_pos = goal_pos_all[-1,:]
+        #     self._wrap_dist = np.linalg.norm(drone_pos - self.goal_pos, axis=0)
         ## Crash Penality
         crash_penality = -1 if self.env.env.currently_collided else 0
         ## Constraint Violation Penality
         cstr_penalty = -1 if self.env.env.cnstr_violation else 0
+        print(f'Constraint Violated') if cstr_penalty == -1 else None
         ## Gate Passing Reward
         gate_rew = 1 if self.env.env.stepped_through_gate else 0
         return reward+crash_penality+cstr_penalty+gate_rew
@@ -445,15 +446,16 @@ class DroneRacingObservationWrapper:
             The transformed observation and the info dict.
         """
         obs, reward, done, info, action = self.env.step(*args, **kwargs)
+        curr_time = args[0] # Current Time
         if self.obs_goal_horizon > 0:
-            self._wrap_ctr_step += 1
+            self._wrap_ctr_step += 1 if curr_time > 2 else self._wrap_ctr_step
             obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
-            print(f'Old Goal Position: {self.goal_pos}')
-            print(f'Obs -2: {obs[-24:-12]}')
-            print(f'Previous Distance: {self._wrap_dist}')
-            print(f'Current Distance: {np.linalg.norm(obs[:3] - obs[-24:-21], axis=0)}')
-            print(f'New Goal Position: {obs[-12:]}')
-            print(f'New Distance: {np.linalg.norm(obs[:3] - obs[-12:-9], axis=0)}')
+            # print(f'Old Goal Position: {self.goal_pos}')
+            # print(f'Obs -2: {obs[-24:-12]}')
+            # print(f'Previous Distance: {self._wrap_dist}')
+            # print(f'Current Distance: {np.linalg.norm(obs[:3] - obs[-24:-21], axis=0)}')
+            # print(f'New Goal Position: {obs[-12:]}')
+            # print(f'New Distance: {np.linalg.norm(obs[:3] - obs[-12:-9], axis=0)}')
             self.goal_pos = obs[-12:]
             self._wrap_dist = np.linalg.norm(obs[:3] - self.goal_pos[:3], axis=0)
         else:
@@ -461,6 +463,36 @@ class DroneRacingObservationWrapper:
             obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)
         return obs, reward, done, info, action
 
+
+class ActionWrapper(ActionWrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.current_obs = None
+
+    def reset(self, **kwargs):
+        self.current_obs, info = self.env.reset(**kwargs)
+        return self.current_obs, info
+
+    def step(self, action):
+        modified_action = self.modify_action(action, self.current_obs)
+        obs, reward, terminated, truncated, info = self.env.step(modified_action)
+        self.current_obs = obs
+        return obs, reward, terminated, truncated, info
+
+    def modify_action(self, action, obs):
+        # Modify the action based on the current observation
+        # Example: setting action to 0 if a specific condition is met in the observation
+        current_pose = obs[:3]
+        goal_pose = obs[12:15]
+        action_traj = goal_pose - current_pose
+        action = action + action_traj
+        check_mask1 = action > 1
+        check_mask2 = action < -1
+        if check_mask1.any():
+            action[check_mask1] = 1
+        if check_mask2.any():
+            action[check_mask2] = -1
+        return action
 
 class MultiProcessingWrapper(Wrapper):
     """Wrapper to enable multiprocessing for vectorized environments.
