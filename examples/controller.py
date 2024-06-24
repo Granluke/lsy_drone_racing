@@ -87,7 +87,7 @@ class Controller(BaseController):
         #########################
         self.iter_counter = 0
         if X_GOAL is not None and waypoints is not None:
-            self.agent = PPO.load("./models/ppo_gaus_act_comp1.zip")
+            self.agent = PPO.load("./models/ppo_gaus_act_comp3.zip")
             self.action_scale = np.array([1, 1, 1, np.pi])
             self.X_GOAL = X_GOAL
             self.waypoints = waypoints
@@ -231,6 +231,7 @@ class Controller(BaseController):
                     action = self.action_scale * action
                     # Adding the first point in the horizon
                     pos = self.action_scale[:-1] * obs[12:15]
+                    pos = 0.4*action[:3] + 0.6*pos
                     yaw = 0.0
                     # print(f'Obs Next Goal: {obs[12:15]}')
                     # print(f'X_GOAL: {self.X_GOAL[self.iter_counter,:3]}')

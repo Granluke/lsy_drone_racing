@@ -63,7 +63,7 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
     logging.basicConfig(level=logging.INFO)
     config_path = Path(__file__).resolve().parents[1] / config # resolve() returns the absolute path, parents[1] /config adds the config
     ## Training parameters
-    PROCESSES_TO_TEST = 2 # Number of vectorized environments to train
+    PROCESSES_TO_TEST = 1 # Number of vectorized environments to train
     NUM_EXPERIMENTS = 1  # RL algorithms can often be unstable, so we run several experiments (see https://arxiv.org/abs/1709.06560)
     TRAIN_STEPS = 2**18  # Number of training steps
     EVAL_EPS = 5 # Number of episodes for evaluation
@@ -80,12 +80,12 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
         vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui)),
                                      n_envs=PROCESSES_TO_TEST, vec_env_cls=SubprocVecEnv)
         train_env = vec_train_env
-    k = 2 # The learning iteration
+    k = 1 # The learning iteration
     save_path = './models'
-    save_name = '/ppo_gaus_act_comp' + str(k)
+    save_name = '/ppo_act_comp_10s' + str(k)
     load_path = save_path
-    load_name = '/ppo_gaus_act_comp' + str(k-1) + '.zip'
-    tb_log_name = './PPO_ACT_COMP' + str(k)
+    load_name = '/ppo_act_comp_10s' + str(k-1) + '.zip'
+    tb_log_name = './PPO_ACT_COMP10s' + str(k)
     checkpoint_callback = CheckpointCallback(save_freq=2**15, save_path=save_path+save_name,
                                          name_prefix='rl_model')
     if if_validate:
@@ -100,14 +100,14 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
         if not load_model:
             print(f'Creating model...')
             model = ALGO("MlpPolicy", train_env, verbose=1, tensorboard_log="./logs", n_steps=n_steps,
-                        learning_rate=0.0003, ent_coef=0.01, device='auto', n_epochs=10, batch_size=batch_size,
-                        clip_range=0.2, gae_lambda=0.95)
+                        learning_rate=0.0003, ent_coef=0.0, device='auto', n_epochs=10, batch_size=batch_size,
+                        clip_range=0.15, gae_lambda=0.95)
         else:
             print(f'Loading model from {load_path+load_name}')
             model = ALGO.load(load_path+load_name, env=train_env)
-            model.ent_coef = 0.01
+            model.ent_coef = 0.0
             from stable_baselines3.common.utils import get_schedule_fn
-            model.clip_range = get_schedule_fn(0.2)
+            model.clip_range = get_schedule_fn(0.15)
         print(f'Starting experiment...')
         print(f'Log Name: {tb_log_name}')
         model.learn(total_timesteps=TRAIN_STEPS, progress_bar=True, tb_log_name=tb_log_name, callback=callback_list)

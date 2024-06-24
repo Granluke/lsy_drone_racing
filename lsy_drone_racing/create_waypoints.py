@@ -108,7 +108,7 @@ def create_waypoints(initial_obs: np.ndarray, initial_info: dict, ctrl_freq:int=
     waypoints = np.array(waypoints)
 
     tck, u = interpolate.splprep([waypoints[:, 0], waypoints[:, 1], waypoints[:, 2]], s=0.1)
-    duration = 12
+    duration = 10
     t = np.linspace(0, 1, int(duration * CTRL_FREQ))
     ref_x, ref_y, ref_z = interpolate.splev(t, tck)
     assert max(ref_z) < 2.5, "Drone must stay below the ceiling"

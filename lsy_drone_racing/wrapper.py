@@ -71,14 +71,12 @@ class DroneRacingWrapper(Wrapper):
         # All values are scaled to [-1, 1]. Transformed back, x, y, z values of 1 correspond to 5m.
         # The yaw value of 1 corresponds to pi radians.
         self.action_scale = np.array([1, 1, 1, np.pi])
-        self.learned_action_scale = 0.4
+        self.learned_action_scale = 0.25
         self.fixed_action_scale = 1 - self.learned_action_scale
         print(f'Fixed Action Scale: {self.fixed_action_scale}')
         print(f'Learned Action Scale: {self.learned_action_scale}')
-        act_low = np.array([-1, -1, -1, -1])
-        scale = np.ones(4)
-        scale[:3] *= self.learned_action_scale
-        self.action_space = Box(act_low*scale, -act_low*scale, dtype=np.float32)
+        act_low = np.array([-1, -1, -1, 0])
+        self.action_space = Box(act_low*self.learned_action_scale, -act_low*self.learned_action_scale, dtype=np.float32)
         self.action_space_total = Box(-1, 1, shape=(4,), dtype=np.float32)
 
         # Observation space:
@@ -161,6 +159,7 @@ class DroneRacingWrapper(Wrapper):
         Returns:
             The initial observation and info dict of the next episode.
         """
+        print('Resetting Environment!')
         self._reset_required = False
         self._sim_time = 0.0
         self._f_rotors[:] = 0.0
@@ -173,16 +172,11 @@ class DroneRacingWrapper(Wrapper):
             self.env.env.INIT_X = start_pose[0] + 0.05 # Manual adjustment
             self.env.env.INIT_Y = start_pose[1]
             self.env.env.INIT_Z = start_pose[2]
-            if start_ind > self.X_GOAL.shape[0]/4 and False:
-                next_pose = self.X_GOAL[start_ind+1,:3]
-                self.env.env.INIT_X_DOT = (next_pose[0] - start_pose[0])*30
-                self.env.env.INIT_Y_DOT = (next_pose[1] - start_pose[1])*30
-                self.env.env.INIT_Z_DOT = (next_pose[2] - start_pose[2])*30
+            ## Reset again to change the env to the initial state
+            obs, info = self.env.reset()
+            # env.reset() cannot reset in the exact position, which leads to a mismatch.
         else:
             self.X_GOAL_crop = deepcopy(self.X_GOAL)
-        ## Reset again to change the env to the initial state
-        obs, info = self.env.reset()
-        # env.reset() cannot reset in the exact position, which leads to a mismatch.
         # Store obstacle height for observation expansion during env steps.
         if self.obs_goal_horizon > 0:
             self._wrap_ctr_step = 0
@@ -193,8 +187,11 @@ class DroneRacingWrapper(Wrapper):
             raise NotImplementedError
             obs = self.observation_transform(obs, info).astype(np.float32)
         self._drone_pose = obs[[0, 1, 2, 5]]
-        # print(f'Reset Position: {obs[:3]}')
-        # print(f'Reset Goal Position: {obs[12:15]}')
+        self.idx_chunk_goal = self.obs_goal_horizon
+        self.chunk_goal = obs[12*self.idx_chunk_goal:]
+        # print(f'In RESET Chunk Idx: {self.idx_chunk_goal}')
+        # print(f'In RESET Current Chunk Goal: {self.chunk_goal}')
+        self._current_gate = info["current_gate_id"]
         return obs, info
 
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
@@ -240,7 +237,14 @@ class DroneRacingWrapper(Wrapper):
             self._wrap_ctr_step += 1
             obs = self.observation_transform(obs, info, self.X_GOAL_crop, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
             #### Integrate Reward Wrapper inside
+            self.idx_chunk_goal -= 1
+            self.chunk_goal = obs[12*self.idx_chunk_goal:12*(self.idx_chunk_goal+1)]
+            # print(f'Current Chunk Idx: {self.idx_chunk_goal}')
+            # print(f'Current Chunk Goal: {self.chunk_goal}')
             reward = self._compute_reward(obs, reward, terminated, truncated, info)
+            self.idx_chunk_goal = self.obs_goal_horizon+1 if self.idx_chunk_goal == 1 else self.idx_chunk_goal
+            # we set it to idx+1 because in the step() we will decrease it right away. The inconvenience 
+            # comes from initializing it directly in reset().
         else:
             raise NotImplementedError
             obs = self.observation_transform(obs, info).astype(np.float32)
@@ -252,6 +256,9 @@ class DroneRacingWrapper(Wrapper):
         self._reset_required = terminated or truncated
         # print(f'Step Position: {obs[:3]}')
         # print(f'Step Goal Position: {obs[12:15]}')
+        if info["current_gate_id"] != self._current_gate:
+            self._current_gate = info["current_gate_id"]
+            print(f'Gate Passed! Current Gate Index: {self._current_gate}')
         return obs, reward, terminated, truncated, info
 
     def _action_transform(self, action: np.ndarray) -> np.ndarray:
@@ -317,7 +324,7 @@ class DroneRacingWrapper(Wrapper):
                 ]
             )
         if obs_goal_horizon > 0:
-            wp_idx = [min(crnt_step + 1 + i, X_GOAL.shape[0]-1) 
+            wp_idx = [min(crnt_step + i, X_GOAL.shape[0]-1) 
                     for i in range(obs_goal_horizon)]
             goal_state = X_GOAL[wp_idx].flatten()
             obs = np.concatenate([obs, goal_state])
@@ -340,20 +347,26 @@ class DroneRacingWrapper(Wrapper):
         """
         reward = 0
         drone_pos = obs[:3]
-        goal_state = obs[-12*self.obs_goal_horizon:].reshape(self.obs_goal_horizon, 12)
-        goal_x, goal_y, goal_z = goal_state[:, 0], goal_state[:, 1], goal_state[:, 2]
-        goal_pos_all = np.array([goal_x, goal_y, goal_z]).T
+        # goal_state = obs[-12*self.obs_goal_horizon:].reshape(self.obs_goal_horizon, 12)
+        # goal_x, goal_y, goal_z = goal_state[:, 0], goal_state[:, 1], goal_state[:, 2]
+        # goal_pos_all = np.array([goal_x, goal_y, goal_z]).T
         # Don't know if it is necessary to enforce closeness to the whole horizon
         if False:
-            goal_pos = goal_pos_all[0,:]
-            dist = np.sum(np.linalg.norm(drone_pos - goal_pos, axis=0))
-            reward += np.exp(-dist)
-        elif True:
+            dist = np.linalg.norm(drone_pos[None,:] - goal_pos_all, axis=1)
+            expected_dist = np.linalg.norm(goal_pos_all[1:,:] - goal_pos_all[:-1,:], axis=1)
+            disc_factor = [0.9**i for i in range(self.obs_goal_horizon)]
+            reward += (np.exp(-2*(dist-expected_dist))-0.3).dot(disc_factor)
+        elif False:
             dist = np.linalg.norm(drone_pos[None,:] - goal_pos_all, axis=1)
             disc_factor = [0.99**i for i in range(self.obs_goal_horizon)]
-            rew_std = [0.1*i/2 for i in range(1,self.obs_goal_horizon+1)]
-            reward += np.exp(-1/2*(dist/rew_std)**2).dot(disc_factor)
-            # print(f'Reward: {reward}')
+            rew_std = [0.05 for i in range(1,self.obs_goal_horizon+1)]
+            reward += 20*np.exp(-1/2*(dist/rew_std)**2).dot(disc_factor)
+            # import pdb; pdb.set_trace()
+            print(f'Reward: {reward}')
+        elif True:
+            dist = np.linalg.norm(drone_pos - self.chunk_goal[:3], axis=0)
+            reward += np.exp(-dist)
+            print(f'Reward: {reward}')
         else:
             # print(f'Drone Position: {drone_pos}')
             # print(f'Goal Position: {goal_pos_all[0,:]}')
@@ -361,7 +374,7 @@ class DroneRacingWrapper(Wrapper):
             y_diff = drone_pos[1] - goal_y[0]
             z_diff = drone_pos[2] - goal_z[0]
             weights = [0.9, 0.9, 1.2]
-            reward += (weights[0]*np.exp(-x_diff**2) + weights[1]*np.exp(-y_diff**2) + weights[2]*np.exp(-z_diff**2))/sum(weights)
+            reward += (weights[0]*np.exp(-np.abs(x_diff)) + weights[1]*np.exp(-np.abs(y_diff)) + weights[2]*np.exp(-np.abs(z_diff)))/sum(weights)
             # print(f'Reward: {reward}')
         ## Enforce Progress
         # if self._wrap_ctr_step >= 1:
@@ -374,14 +387,18 @@ class DroneRacingWrapper(Wrapper):
         #     self.goal_pos = goal_pos_all[-1,:]
         #     self._wrap_dist = np.linalg.norm(drone_pos - self.goal_pos, axis=0)
         ## Crash Penality
-        crash_penality = -1000 if self.env.env.currently_collided else 0
+        crash_penality = -100 if self.env.env.currently_collided else 0
         # print(f'Crashed! Postion: {obs[:3]}') if crash_penality != 0 else None
         ## Constraint Violation Penality
-        cstr_penalty = -1000 if self.env.env.cnstr_violation else 0
+        cstr_penalty = -100 if self.env.env.cnstr_violation else 0
         # print(f'Constraint Violated! Postion: {obs[:3]}') if cstr_penalty != 0 else None
         ## Gate Passing Reward
-        gate_rew = 250 if self.env.env.stepped_through_gate else 0
-        print(f'Gate Passed! Postion: {obs[:3]}') if gate_rew != 0 else None
+        # gate_rew = 25 if self.env.env.stepped_through_gate else 0
+        # if gate_rew != 0:
+        #     print(f'Gate Passed! Postion: {obs[:3]}, Gate: {info["current_gate_id"]}') if gate_rew != 0 else None
+        # else:
+        #     print(f'Current Gate Index: {info["current_gate_id"]} and {self.env.env.current_gate}')
+        gate_rew=0
         return reward+crash_penality+cstr_penalty+gate_rew
 
         
