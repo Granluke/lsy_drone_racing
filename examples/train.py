@@ -57,19 +57,19 @@ def create_race_env(config_path: Path, gui: bool = False, random_train=False) ->
     return ActionWrapper(drone_env)
 
 
-def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
+def main(config: str = "config/level1_train.yaml", gui: bool = False):
     """Create the environment, check its compatibility with sb3, and run a PPO agent."""
 
     logging.basicConfig(level=logging.INFO)
     config_path = Path(__file__).resolve().parents[1] / config # resolve() returns the absolute path, parents[1] /config adds the config
     ## Training parameters
-    PROCESSES_TO_TEST = 1 # Number of vectorized environments to train
+    PROCESSES_TO_TEST = 2 # Number of vectorized environments to train
     NUM_EXPERIMENTS = 1  # RL algorithms can often be unstable, so we run several experiments (see https://arxiv.org/abs/1709.06560)
     TRAIN_STEPS = 2**18  # Number of training steps
     EVAL_EPS = 5 # Number of episodes for evaluation
     ALGO = PPO
     n_steps = 2**10
-    batch_size = n_steps // 2**3
+    batch_size = n_steps // 2**4
     ## Create Environments
     load_model = False
     if_validate = True
@@ -80,12 +80,12 @@ def main(config: str = "config/getting_started_train.yaml", gui: bool = False):
         vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui)),
                                      n_envs=PROCESSES_TO_TEST, vec_env_cls=SubprocVecEnv)
         train_env = vec_train_env
-    k = 1 # The learning iteration
+    k = 2 # The learning iteration
     save_path = './models'
-    save_name = '/ppo_act_comp_10s' + str(k)
+    save_name = '/ppo_lvl1_8s' + str(k)
     load_path = save_path
     load_name = '/ppo_act_comp_10s' + str(k-1) + '.zip'
-    tb_log_name = './PPO_ACT_COMP10s' + str(k)
+    tb_log_name = save_name.split('/')[-1]
     checkpoint_callback = CheckpointCallback(save_freq=2**15, save_path=save_path+save_name,
                                          name_prefix='rl_model')
     if if_validate:

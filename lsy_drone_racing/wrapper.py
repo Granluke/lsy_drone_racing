@@ -71,11 +71,11 @@ class DroneRacingWrapper(Wrapper):
         # All values are scaled to [-1, 1]. Transformed back, x, y, z values of 1 correspond to 5m.
         # The yaw value of 1 corresponds to pi radians.
         self.action_scale = np.array([1, 1, 1, np.pi])
-        self.learned_action_scale = 0.25
+        self.learned_action_scale = 0.3
         self.fixed_action_scale = 1 - self.learned_action_scale
         print(f'Fixed Action Scale: {self.fixed_action_scale}')
         print(f'Learned Action Scale: {self.learned_action_scale}')
-        act_low = np.array([-1, -1, -1, 0])
+        act_low = np.array([-1, -1, -1, -1])
         self.action_space = Box(act_low*self.learned_action_scale, -act_low*self.learned_action_scale, dtype=np.float32)
         self.action_space_total = Box(-1, 1, shape=(4,), dtype=np.float32)
 
@@ -116,8 +116,11 @@ class DroneRacingWrapper(Wrapper):
         self.obs_goal_horizon = self.env.env.obs_goal_horizon
         if self.obs_goal_horizon > 0:
             traj_limits = [5, 5, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-            temp_h = np.array(traj_limits*self.obs_goal_horizon)
-            temp_l = -np.array(traj_limits*self.obs_goal_horizon)
+            # temp_h = np.array(traj_limits*self.obs_goal_horizon)
+            # temp_l = -np.array(traj_limits*self.obs_goal_horizon)
+            temp_h = np.array(traj_limits*2)
+            temp_l = -np.array(traj_limits*2)
+            # One for the next state and the other is for goal of that chunk.
             obs_limits_high = np.concatenate((obs_limits_high, temp_h), axis=0)
             obs_limits_low = np.concatenate((obs_limits_low, temp_l), axis=0)
         self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
@@ -181,16 +184,16 @@ class DroneRacingWrapper(Wrapper):
         if self.obs_goal_horizon > 0:
             self._wrap_ctr_step = 0
             obs = self.observation_transform(obs, info, self.X_GOAL_crop, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
-            self.goal_pos = obs[-12:]
-            self._wrap_dist = np.linalg.norm(obs[:3] - self.goal_pos[:3], axis=0)
         else:
             raise NotImplementedError
             obs = self.observation_transform(obs, info).astype(np.float32)
         self._drone_pose = obs[[0, 1, 2, 5]]
         self.idx_chunk_goal = self.obs_goal_horizon
         self.chunk_goal = obs[12*self.idx_chunk_goal:]
+        obs = np.concatenate([obs[:24], self.chunk_goal])
         # print(f'In RESET Chunk Idx: {self.idx_chunk_goal}')
         # print(f'In RESET Current Chunk Goal: {self.chunk_goal}')
+        self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
         self._current_gate = info["current_gate_id"]
         return obs, info
 
@@ -236,11 +239,11 @@ class DroneRacingWrapper(Wrapper):
         if self.obs_goal_horizon > 0:
             self._wrap_ctr_step += 1
             obs = self.observation_transform(obs, info, self.X_GOAL_crop, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
-            #### Integrate Reward Wrapper inside
+            ## Update Chunk Goal and Change Observation
             self.idx_chunk_goal -= 1
             self.chunk_goal = obs[12*self.idx_chunk_goal:12*(self.idx_chunk_goal+1)]
-            # print(f'Current Chunk Idx: {self.idx_chunk_goal}')
-            # print(f'Current Chunk Goal: {self.chunk_goal}')
+            obs = np.concatenate([obs[:24], self.chunk_goal])
+            ## Integrate Reward Wrapper inside
             reward = self._compute_reward(obs, reward, terminated, truncated, info)
             self.idx_chunk_goal = self.obs_goal_horizon+1 if self.idx_chunk_goal == 1 else self.idx_chunk_goal
             # we set it to idx+1 because in the step() we will decrease it right away. The inconvenience 
@@ -364,9 +367,19 @@ class DroneRacingWrapper(Wrapper):
             # import pdb; pdb.set_trace()
             print(f'Reward: {reward}')
         elif True:
-            dist = np.linalg.norm(drone_pos - self.chunk_goal[:3], axis=0)
-            reward += np.exp(-dist)
+            if self.idx_chunk_goal == self.obs_goal_horizon:
+                ## This if case is for switching to the next chunk.
+                self.chunk_distance = np.linalg.norm(drone_pos - self.chunk_goal[:3], axis=0)
+                reward += 0.1
+            current_chunk_distance = np.linalg.norm(drone_pos - self.chunk_goal[:3], axis=0)
+            reward += self.chunk_distance - current_chunk_distance
+            self.chunk_distance = current_chunk_distance
             print(f'Reward: {reward}')
+        elif False:
+            dist = np.linalg.norm(drone_pos - self.chunk_goal[:3], axis=0)
+            # Chunk_goal is the same as the last observation
+            reward += np.exp(-dist)
+            # print(f'Reward: {reward}')
         else:
             # print(f'Drone Position: {drone_pos}')
             # print(f'Goal Position: {goal_pos_all[0,:]}')
@@ -429,6 +442,7 @@ class DroneRacingObservationWrapper:
         self.obs_goal_horizon = self.env.env.obs_goal_horizon
         self._wrap_ctr_step = None
         self.inc_gate_obs = inc_gate_obs
+        self.if_chunk = True
     
     def __getattribute__(self, name: str) -> Any:
         """Get an attribute from the object.
@@ -462,8 +476,11 @@ class DroneRacingObservationWrapper:
         if self.obs_goal_horizon > 0:
             self._wrap_ctr_step = 0
             obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
-            self.goal_pos = obs[-12:]
-            self._wrap_dist = np.linalg.norm(obs[:3] - self.goal_pos[:3], axis=0)
+            if self.if_chunk:
+                self.idx_chunk_goal = self.obs_goal_horizon
+                self.chunk_goal = obs[12*self.idx_chunk_goal:12*(self.idx_chunk_goal+1)]
+                obs = np.concatenate([obs[:24], self.chunk_goal])
+                self.idx_chunk_goal = self.obs_goal_horizon+1 if self.idx_chunk_goal == 1 else self.idx_chunk_goal
         else:
             raise NotImplementedError
             obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)
@@ -492,8 +509,11 @@ class DroneRacingObservationWrapper:
             # print(f'Current Distance: {np.linalg.norm(obs[:3] - obs[-24:-21], axis=0)}')
             # print(f'New Goal Position: {obs[-12:]}')
             # print(f'New Distance: {np.linalg.norm(obs[:3] - obs[-12:-9], axis=0)}')
-            self.goal_pos = obs[-12:]
-            self._wrap_dist = np.linalg.norm(obs[:3] - self.goal_pos[:3], axis=0)
+            if self.if_chunk:
+                self.idx_chunk_goal -= 1
+                self.chunk_goal = obs[12*self.idx_chunk_goal:12*(self.idx_chunk_goal+1)]
+                obs = np.concatenate([obs[:24], self.chunk_goal])
+                self.idx_chunk_goal = self.obs_goal_horizon+1 if self.idx_chunk_goal == 1 else self.idx_chunk_goal
         else:
             raise NotImplementedError
             obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)
@@ -521,18 +541,21 @@ class ActionWrapper(ActionWrapper):
         # Modify the action based on the current observation
         # Example: setting action to 0 if a specific condition is met in the observation
         current_pose = obs[:3]
+        current_yaw = obs[5]
         goal_pose = obs[12:15]
-        action_traj = goal_pose - current_pose
-        action[:3] = self.las * action[:3] + self.fas * action_traj
-        # action[:3] = action_traj
-        action[3] = 0
+        action_fix = goal_pose - current_pose
+        goal_yaw = np.arctan2((goal_pose[1]-current_pose[1]), (goal_pose[0]-current_pose[0]))
+        yaw = (goal_yaw - current_yaw)/np.pi
+        action_fix = np.concatenate([action_fix, [yaw]])
+        action = action + self.fas * action_fix
+        # action = action_fix
         check_mask1 = action > 1
         check_mask2 = action < -1
         if check_mask1.any():
             action[check_mask1] = 1
         if check_mask2.any():
             action[check_mask2] = -1
-        return action
+        return np.float32(action)
 
 class MultiProcessingWrapper(Wrapper):
     """Wrapper to enable multiprocessing for vectorized environments.
