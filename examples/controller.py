@@ -87,7 +87,7 @@ class Controller(BaseController):
         #########################
         self.iter_counter = 0
         if X_GOAL is not None and waypoints is not None:
-            self.agent = PPO.load("./models/ppo_lvl1_8s1.zip")
+            self.agent = PPO.load("./models/ppo_wp_lvl1_7s1.zip")
             self.las = self.agent.action_space.high[0]
             self.fas = 1 - self.las
             print(f'LAS: {self.las}')
@@ -235,9 +235,9 @@ class Controller(BaseController):
                     # Adding the first point in the horizon
                     pos = self.action_scale[:-1] * obs[12:15]
                     pos = (self.las*obs[:3] + action[:3]) + self.fas*pos
-                    # pos = 0.0*(obs[:3] + action[:3]) + 1.0*pos
-                    yaw = np.arctan2((pos[1]-obs[1]), (pos[0]-obs[0]))
-                    yaw = action[3] + self.fas*yaw
+                    # pos = 0.0*(self.las*obs[:3] + action[:3]) + 1.0*pos
+                    yaw = np.arctan2(-(pos[1]-obs[1]), (pos[0]-obs[0]))
+                    # yaw = np.pi*action[3] + self.fas*yaw
                     # print(f'Obs Next Goal: {obs[12:15]}')
                     # print(f'X_GOAL: {self.X_GOAL[self.iter_counter,:3]}')
                     # yaw = 0.0
