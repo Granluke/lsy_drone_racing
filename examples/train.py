@@ -53,7 +53,7 @@ def create_race_env(config_path: Path, gui: bool = False, random_train=False) ->
     # x,dx,y,dy,z,dz,phi,theta,psi,p,q,r
     # We need to define something for the missing states since we only have x,y,z
     # Obey the order of the states
-    drone_env = DroneRacingWrapper(firmware_env, terminate_on_lap=True, train_random_state=random_train, inc_gate_obs=inc_gate_obs)
+    drone_env = DroneRacingWrapper(firmware_env, terminate_on_lap=True, train_random_state=random_train)
     return ActionWrapper(drone_env)
 
 
@@ -73,7 +73,7 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
     ## Create Environments
     load_model = True
     if_validate = True
-    random_train = True
+    random_train = False
     train_env = create_race_env(config_path=config_path, gui=gui, random_train=random_train)
     check_env(train_env)
     if PROCESSES_TO_TEST > 1:
@@ -81,7 +81,7 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
         vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui, random_train=random_train)),
                                      n_envs=PROCESSES_TO_TEST, vec_env_cls=SubprocVecEnv)
         train_env = vec_train_env
-    k = 6 # The learning iteration
+    k = 10 # The learning iteration
     save_path = './models'
     save_name = '/ppo_wp_lvl1_7s_gate1234' + str(k)
     load_path = save_path

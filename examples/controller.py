@@ -36,6 +36,7 @@ from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
 from lsy_drone_racing.utils import draw_trajectory
 from lsy_drone_racing.rotations import map2pi
+from lsy_drone_racing.global_parameters import *
 
 
 class Controller(BaseController):
@@ -150,11 +151,11 @@ class Controller(BaseController):
 
         if not self._take_off:
             command_type = Command.TAKEOFF
-            args = [0.3, 2]  # Height, duration
+            args = [TAKEOFF_HEIGHT, TAKEOFF_DURATION]  # Height, duration
             self._take_off = True  # Only send takeoff command once
         else:
-            step = iteration - 2 * self.CTRL_FREQ  # Account for 2s delay due to takeoff
-            if ep_time - 2 > 0 and step < len(self.ref_x):
+            step = iteration - TAKEOFF_DURATION * self.CTRL_FREQ  # Account for 2s delay due to takeoff
+            if ep_time - TAKEOFF_DURATION > 0 and step < len(self.ref_x):
                 command_type = Command.FULLSTATE
                 self.iter_counter += 1
                 action, _states = self.agent.predict(observation=obs)

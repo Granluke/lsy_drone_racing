@@ -310,7 +310,7 @@ def calc_best_path(gates, obstacles, start_point, t, plot=True):
     x_goal[:,0] = path[0]
     x_goal[:,1] = path[1]
     x_goal[:,2] = path[2]
-    return x_goal, waypoints
+    return np.float32(x_goal), np.float32(waypoints)
 
 
 

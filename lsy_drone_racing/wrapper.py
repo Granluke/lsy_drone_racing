@@ -18,6 +18,8 @@ Warning:
 
 from __future__ import annotations
 
+import os
+from contextlib import redirect_stdout
 from copy import deepcopy
 import logging
 from typing import Any
@@ -32,6 +34,7 @@ from safe_control_gym.envs.benchmark_env import Cost, Task
 from lsy_drone_racing.rotations import map2pi
 from lsy_drone_racing.create_waypoints import create_waypoints, find_closest_traj_point, find_closest_gate
 from lsy_drone_racing.path_planning import calc_best_path
+from lsy_drone_racing.global_parameters import *
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +48,7 @@ class DroneRacingWrapper(Wrapper):
 
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self, env: FirmwareWrapper, terminate_on_lap: bool = True, train_random_state: bool = False, inc_gate_obs: bool = True):
+    def __init__(self, env: FirmwareWrapper, terminate_on_lap: bool = True, train_random_state: bool = False):
         """Initialize the wrapper.
 
         Args:
@@ -71,6 +74,7 @@ class DroneRacingWrapper(Wrapper):
         # yaw)      The desired yaw angle.
         # All values are scaled to [-1, 1]. Transformed back, x, y, z values of 1 correspond to 5m.
         # The yaw value of 1 corresponds to pi radians.
+        #region Initialize spaces
         self.action_scale = np.array([1, 1, 1, np.pi])
         self.learned_action_scale = 0.2 # Contribution of the learned action
         self.fixed_action_scale = 1 - self.learned_action_scale
@@ -103,10 +107,9 @@ class DroneRacingWrapper(Wrapper):
         # Velocity limits are set to 10 m/s for the drone and 10 rad/s for the angular velocity.
         # While drones could go faster in theory, it's not safe in practice and we don't allow it in
         # sim either.
-        self.inc_gate_obs = inc_gate_obs
         drone_limits = [5, 5, 5, np.pi, np.pi, np.pi, 10, 10, 10, 10, 10, 10]
         ## We may want to choose if we want to include the gate and obstacle observations
-        if self.inc_gate_obs:
+        if False:
             gate_limits = [5, 5, 5, np.pi] * n_gates + [1] * n_gates  # Gate poses and range mask
             obstacle_limits = [5, 5, 5] * n_obstacles + [1] * n_obstacles  # Obstacle pos and range mask
             obs_limits = drone_limits + gate_limits + obstacle_limits + [n_gates]  # [1] for gate_id
@@ -129,7 +132,7 @@ class DroneRacingWrapper(Wrapper):
             obs_limits_high = np.concatenate((obs_limits_high, temp_h), axis=0)
             obs_limits_low = np.concatenate((obs_limits_low, temp_l), axis=0)
         self.observation_space = Box(obs_limits_low, obs_limits_high, dtype=np.float32)
-
+        #endregion
         self.pyb_client_id: int = env.env.PYB_CLIENT
         # Config and helper flags
         self.terminate_on_lap = terminate_on_lap
@@ -162,6 +165,7 @@ class DroneRacingWrapper(Wrapper):
         """Return the current simulation time in seconds."""
         return self._sim_time
     
+    #region Reset
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[np.ndarray, dict]:
@@ -179,8 +183,23 @@ class DroneRacingWrapper(Wrapper):
         self._sim_time = 0.0
         self._f_rotors[:] = 0.0
         obs, info = self.env.reset()
-        self.X_GOAL, self.waypoints = create_waypoints(obs, info, self.env.ctrl_freq)
+        #region Path Planning
+        ## Extract data for the path planning
+        self.gates = info["nominal_gates_pos_and_type"]
+        self._current_gate_idx = info["current_gate_id"]
+        self.obstacles = info["nominal_obstacles_pos"]
+        self.start_point = [obs[0], obs[2], TAKEOFF_HEIGHT]
+        freq = self.env.ctrl_freq
+        ## Define times steps for the trajectory
+        self.t = np.linspace(0, 1, int(DURATION * freq))
+        ## Path Planning
+        # It is only for not printing
+        with open(os.devnull, 'w') as fnull:
+            with redirect_stdout(fnull):
+                self.X_GOAL, self.waypoints = calc_best_path(gates=self.gates, obstacles=self.obstacles, start_point=self.start_point, t=self.t, plot=False)
+        ## Find the trajectory point closest to the waypoints
         self.wp_traj_idx = find_closest_traj_point(self.waypoints, self.X_GOAL)
+        ## Find the gate corresponding to the waypoints
         self.wp_gate_dict = find_closest_gate(self.X_GOAL, info, self.wp_traj_idx)
         if self.train_random_state: # Spawn the drone on randomly chosen waypoint
             # start_ind = np.random.randint(1, self.waypoints.shape[0]-2)
@@ -201,13 +220,12 @@ class DroneRacingWrapper(Wrapper):
         else:
             self.X_GOAL_crop = deepcopy(self.X_GOAL)
             self._current_gate_idx = info["current_gate_id"]
+        #endregion
         # Keep the horizon included in the obs
-        if self.obs_goal_horizon > 0:
-            self._wrap_ctr_step = 0
-            obs = self.observation_transform(obs, info, self.X_GOAL_crop, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
-        else:
-            raise NotImplementedError
-            obs = self.observation_transform(obs, info).astype(np.float32)
+        assert self.obs_goal_horizon > 0, "The horizon must be greater than 0"
+        self._wrap_ctr_step = 0
+        #region Observation Transform
+        obs = self.observation_transform(obs, info, self.X_GOAL_crop, self._wrap_ctr_step, self.obs_goal_horizon).astype(np.float32)
         self._drone_pose = obs[[0, 1, 2, 5]]
         # Determine the point chunk to follow, either waypoints or trajectory, or None
         # traj locks onto the last point of the horizon until it disappears in the obs
@@ -227,8 +245,10 @@ class DroneRacingWrapper(Wrapper):
             obs = np.concatenate([obs[:24], self.chunk_goal, np.zeros(9, dtype=np.float32)])
         else:
             pass
+        #endregion
         return obs, info
-
+    #endregion
+    #region Step
     def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, dict]:
         """Take a step in the environment.
 
@@ -268,42 +288,34 @@ class DroneRacingWrapper(Wrapper):
         # Increment the sim time after the step if we are not yet done.
         if not terminated and not truncated:
             self._sim_time += self.env.ctrl_dt
-        
-        if self.obs_goal_horizon > 0:
-            self._wrap_ctr_step += 1
-            obs = self.observation_transform(obs, info, self.X_GOAL_crop, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
-            ## Update Chunk Goal and Change Observation
-            if self.if_chunk == 'traj':
-                self.idx_chunk_goal -= 1
-                self.chunk_goal = obs[12*self.idx_chunk_goal:12*(self.idx_chunk_goal+1)]
-                obs = np.concatenate([obs[:24], self.chunk_goal])
-                ## Integrate Reward Wrapper inside
-                reward = self._compute_reward(obs, reward, terminated, truncated, info)
-                self.idx_chunk_goal = self.obs_goal_horizon+1 if self.idx_chunk_goal == 1 else self.idx_chunk_goal
-                # we set it to idx+1 because in the step() we will decrease it right away. The inconvenience 
-                # comes from initializing it directly in reset().
-            elif self.if_chunk == 'waypoints':
-                obs = np.concatenate([obs[:24], self.chunk_goal, np.zeros(9, dtype=np.float32)])
-                ## Integrate Reward Wrapper inside
-                reward = self._compute_reward(obs, reward, terminated, truncated, info)
-                if self._wrap_ctr_step == self.idx_wp2traj: # If we arrive the waypoint index
-                    reward += np.exp(-self.chunk_distance) # REWARD for the switch
-                    self.idx_chunk_goal += 1 if self.idx_chunk_goal < self.waypoints.shape[0]-1 else 0
-                    self.chunk_goal = self.waypoints[self.idx_chunk_goal,:]
-                    self.idx_wp2traj = self.wp_traj_idx[self.idx_chunk_goal]
-                    # Update the distance to the next chunk
-                    self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
-            else:
-                ## Integrate Reward Wrapper inside
-                reward = self._compute_reward(obs, reward, terminated, truncated, info)
+        #region Observation Transform
+        self._wrap_ctr_step += 1
+        obs = self.observation_transform(obs, info, self.X_GOAL_crop, self._wrap_ctr_step, self.obs_goal_horizon).astype(np.float32)
+        ## Update Chunk Goal and Change Observation
+        if self.if_chunk == 'traj':
+            self.idx_chunk_goal -= 1
+            self.chunk_goal = obs[12*self.idx_chunk_goal:12*(self.idx_chunk_goal+1)]
+            obs = np.concatenate([obs[:24], self.chunk_goal])
+            ## Integrate Reward Wrapper inside
+            reward = self._compute_reward(obs, reward, terminated, truncated, info)
+            self.idx_chunk_goal = self.obs_goal_horizon+1 if self.idx_chunk_goal == 1 else self.idx_chunk_goal
+            # we set it to idx+1 because in the step() we will decrease it right away. The inconvenience 
+            # comes from initializing it directly in reset().
+        elif self.if_chunk == 'waypoints':
+            obs = np.concatenate([obs[:24], self.chunk_goal, np.zeros(9, dtype=np.float32)])
+            ## Integrate Reward Wrapper inside
+            reward = self._compute_reward(obs, reward, terminated, truncated, info)
+            if self._wrap_ctr_step == self.idx_wp2traj: # If we arrive the waypoint index
+                reward += np.exp(-self.chunk_distance) # REWARD for the switch
+                self.idx_chunk_goal += 1 if self.idx_chunk_goal < self.waypoints.shape[0]-1 else 0
+                self.chunk_goal = self.waypoints[self.idx_chunk_goal,:]
+                self.idx_wp2traj = self.wp_traj_idx[self.idx_chunk_goal]
+                # Update the distance to the next chunk
+                self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
         else:
-            raise NotImplementedError
-            obs = self.observation_transform(obs, info).astype(np.float32)
-        # print(f'Current Control Step: {self._wrap_ctr_step}')
-        # print(f'Current Position: {obs[:3]}')
-        # print(f'Current Chunk Goal: {self.chunk_goal}')
-        # print(f'Next Chunk Switch Index: {self.idx_wp2traj}')
-        # print(f'Current Position:{obs[:3]}, Goal:{self.chunk_goal[:3]}, Distance: {self.chunk_distance}, Reward: {reward}')
+            ## Integrate Reward Wrapper inside
+            reward = self._compute_reward(obs, reward, terminated, truncated, info)
+        #endregion
         self._drone_pose = obs[[0, 1, 2, 5]]
         if obs not in self.observation_space:
             print(f'Observation {obs[9:12]} is not in the observation space!')
@@ -312,8 +324,20 @@ class DroneRacingWrapper(Wrapper):
         if info["current_gate_id"] != self._current_gate_idx:
             self._current_gate_idx = info["current_gate_id"]
             print(f'Gate Passed! Current Gate Index: {self._current_gate_idx}')
-        # print(f'Chunk Index: {self.idx_chunk_goal}, Chunk Goal: {self.chunk_goal[:3]}')
+        ## Recalculating the trajectory if the gate position is changed
+        #region Recalculate Trajectory
+        if self._current_gate_idx != -1:
+            recalc = False if (info['gates_pose'][self._current_gate_idx,:2] == self.gates[self._current_gate_idx, :2]).all() else True
+            if recalc:
+                print(f"Gate {self._current_gate_idx} at {self.gates[self._current_gate_idx]} is not the same as {info['gates_pose'][self._current_gate_idx]}")    
+                self.gates[self._current_gate_idx, :-1] = info['gates_pose'][self._current_gate_idx]
+                self.X_GOAL, self.waypoints = calc_best_path(self.gates, self.obstacles, self.start_point, t=self.t, plot=False)
+                # convert path resulted from splev to x,y,z points
+                assert max(self.X_GOAL[:,2]) < 2.5, "Drone must stay below the ceiling"
+                self.wp_traj_idx = find_closest_traj_point(self.waypoints, self.X_GOAL)
+        #endregion
         return obs, reward, terminated, truncated, info
+    #endregion
 
     def _action_transform(self, action: np.ndarray) -> np.ndarray:
         """Transform the action to the format expected by the firmware env.
@@ -340,7 +364,7 @@ class DroneRacingWrapper(Wrapper):
         assert self.pyb_client_id != -1, "PyBullet not initialized with active GUI"
 
     @staticmethod
-    def observation_transform(obs: np.ndarray, info: dict[str, Any], X_GOAL: np.ndarray=None, crnt_step: int=-1, obs_goal_horizon: int=0, inc_gate_obs: bool=True) -> np.ndarray:
+    def observation_transform(obs: np.ndarray, info: dict[str, Any], X_GOAL: np.ndarray=None, crnt_step: int=-1, obs_goal_horizon: int=0) -> np.ndarray:
         """Transform the observation to include additional information.
 
         Args:
@@ -354,36 +378,35 @@ class DroneRacingWrapper(Wrapper):
         drone_vel = obs[1:6:2]
         drone_rpy = obs[6:9]
         drone_ang_vel = obs[9:12]
-        if inc_gate_obs:
-            obs = np.concatenate(
-                [
-                    drone_pos,
-                    drone_rpy,
-                    drone_vel,
-                    drone_ang_vel,
-                    info["gates_pose"][:, [0, 1, 2, 5]].flatten(),
-                    info["gates_in_range"],
-                    info["obstacles_pose"][:, :3].flatten(),
-                    info["obstacles_in_range"],
-                    [info["current_gate_id"]],
-                ]
-            )
-        else:
-            obs = np.concatenate(
-                [
-                    drone_pos,
-                    drone_rpy,
-                    drone_vel,
-                    drone_ang_vel,
-                ]
-            )
+        # obs = np.concatenate(
+        #     [
+        #         drone_pos,
+        #         drone_rpy,
+        #         drone_vel,
+        #         drone_ang_vel,
+        #         info["gates_pose"][:, [0, 1, 2, 5]].flatten(),
+        #         info["gates_in_range"],
+        #         info["obstacles_pose"][:, :3].flatten(),
+        #         info["obstacles_in_range"],
+        #         [info["current_gate_id"]],
+        #     ]
+        # )
+        obs = np.concatenate(
+            [
+                drone_pos,
+                drone_rpy,
+                drone_vel,
+                drone_ang_vel,
+            ]
+        )
         if obs_goal_horizon > 0:
             wp_idx = [min(crnt_step + i, X_GOAL.shape[0]-1) 
                     for i in range(obs_goal_horizon)]
             goal_state = X_GOAL[wp_idx].flatten()
-            obs = np.concatenate([obs, goal_state])
+            obs = np.concatenate([obs, goal_state], dtype=np.float32)
         return obs
 
+    #region Reward
     def _compute_reward(
         self, obs: np.ndarray, reward: float, terminated: bool, truncated: bool, info: dict
     ) -> float:
@@ -451,7 +474,7 @@ class DroneRacingWrapper(Wrapper):
         # It is outside of the reward function
         task_rew = 10 if info["task_completed"] else 0
         return reward+crash_penality+cstr_penalty+task_rew+body_rate_penalty
-
+    #endregion
         
 class DroneRacingObservationWrapper:
     """Wrapper to transform the observation space the firmware wrapper.
@@ -465,7 +488,7 @@ class DroneRacingObservationWrapper:
         not compatible with the gymnasium API.
     """
 
-    def __init__(self, env: FirmwareWrapper, inc_gate_obs: bool=True):
+    def __init__(self, env: FirmwareWrapper):
         """Initialize the wrapper.
 
         Args:
@@ -479,7 +502,6 @@ class DroneRacingObservationWrapper:
         self.waypoints = None
         self.obs_goal_horizon = self.env.env.obs_goal_horizon
         self._wrap_ctr_step = None
-        self.inc_gate_obs = inc_gate_obs
         self.if_chunk = 'waypoints' # traj or waypoints or None
      
     def __getattribute__(self, name: str) -> Any:
@@ -497,7 +519,7 @@ class DroneRacingObservationWrapper:
             return super().__getattribute__(name)
         except AttributeError:
             return getattr(self.env, name)
-
+    #region Reset
     def reset(self, *args: Any, **kwargs: dict[str, Any]) -> tuple[np.ndarray, dict]:
         """Reset the environment.
 
@@ -509,38 +531,37 @@ class DroneRacingObservationWrapper:
             The transformed observation and the info dict.
         """
         obs, info = self.env.reset(*args, **kwargs)
-        # Just need waypoints for drawing trajectory
-        # self.X_GOAL, self.waypoints = create_waypoints(obs, info, self.env.ctrl_freq)
+        ## Path Planning
+        #region Path Planning
         self.gates = info["nominal_gates_pos_and_type"]
         self._current_gate_idx = info["current_gate_id"]
         self.obstacles = info["nominal_obstacles_pos"]
-        self.start_point = [obs[0], obs[2], 0.3]
+        self.start_point = [obs[0], obs[2], TAKEOFF_HEIGHT]
         freq = self.env.ctrl_freq
-        self.duration = 12
-        self.t = np.linspace(0, 1, int(self.duration * freq))
+        self.t = np.linspace(0, 1, int(DURATION * freq))
         self.X_GOAL, self.waypoints = calc_best_path(gates=self.gates, obstacles=self.obstacles, start_point=self.start_point, t=self.t, plot=False)
         self.wp_traj_idx = find_closest_traj_point(self.waypoints, self.X_GOAL)
-        # self.wp_gate_dict = find_closest_gate(self.X_GOAL, info, self.wp_traj_idx)
-        if self.obs_goal_horizon > 0:
-            self._wrap_ctr_step = 0
-            obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
-            if self.if_chunk == 'traj':
-                self.idx_chunk_goal = self.obs_goal_horizon
-                self.chunk_goal = obs[12*self.idx_chunk_goal:]
-                obs = np.concatenate([obs[:24], self.chunk_goal])
-                # print(f'In RESET Chunk Idx: {self.idx_chunk_goal}')
-                # print(f'In RESET Current Chunk Goal: {self.chunk_goal}')
-                self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
-            elif self.if_chunk == 'waypoints':
-                self.idx_chunk_goal = 1
-                self.chunk_goal = self.waypoints[self.idx_chunk_goal,:]
-                self.idx_wp2traj = self.wp_traj_idx[self.idx_chunk_goal]
-                self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
-                obs = np.concatenate([obs[:24], self.chunk_goal, np.zeros(9, dtype=np.float32)])
-        else:
-            raise NotImplementedError
-            obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)
+        #endregion
+        #region Observation Transform
+        assert self.obs_goal_horizon > 0, "The horizon must be greater than 0"
+        self._wrap_ctr_step = 0
+        obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon).astype(np.float32)
+        if self.if_chunk == 'traj':
+            self.idx_chunk_goal = self.obs_goal_horizon
+            self.chunk_goal = obs[12*self.idx_chunk_goal:]
+            obs = np.concatenate([obs[:24], self.chunk_goal])
+            # print(f'In RESET Chunk Idx: {self.idx_chunk_goal}')
+            # print(f'In RESET Current Chunk Goal: {self.chunk_goal}')
+            self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
+        elif self.if_chunk == 'waypoints':
+            self.idx_chunk_goal = 1
+            self.chunk_goal = self.waypoints[self.idx_chunk_goal,:]
+            self.idx_wp2traj = self.wp_traj_idx[self.idx_chunk_goal]
+            self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
+            obs = np.concatenate([obs[:24], self.chunk_goal, np.zeros(9, dtype=np.float32)])
+        #endregion
         return obs, info
+    #endregion
 
     def step(
         self, *args: Any, **kwargs: dict[str, Any]
@@ -556,33 +577,32 @@ class DroneRacingObservationWrapper:
         """
         obs, reward, done, info, action = self.env.step(*args, **kwargs)
         curr_time = args[0] # Current Time
-        if self.obs_goal_horizon > 0:
-            self._wrap_ctr_step += 1 if curr_time > 2 else self._wrap_ctr_step # 2 seconds for takeoff
-            obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
-            # print(f'Old Goal Position: {self.goal_pos}')
-            # print(f'Obs -2: {obs[-24:-12]}')
-            # print(f'Previous Distance: {self._wrap_dist}')
-            # print(f'Current Distance: {np.linalg.norm(obs[:3] - obs[-24:-21], axis=0)}')
-            # print(f'New Goal Position: {obs[-12:]}')
-            # print(f'New Distance: {np.linalg.norm(obs[:3] - obs[-12:-9], axis=0)}')
-            if self.if_chunk == 'traj':
-                self.idx_chunk_goal = self.obs_goal_horizon
-                self.chunk_goal = obs[12*self.idx_chunk_goal:]
-                obs = np.concatenate([obs[:24], self.chunk_goal])
-                # print(f'In RESET Chunk Idx: {self.idx_chunk_goal}')
-                # print(f'In RESET Current Chunk Goal: {self.chunk_goal}')
+        self._wrap_ctr_step += 1 if curr_time > TAKEOFF_DURATION else self._wrap_ctr_step # X seconds for takeoff
+        #region Observation Transform
+        obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon).astype(np.float32)
+        # print(f'Old Goal Position: {self.goal_pos}')
+        # print(f'Obs -2: {obs[-24:-12]}')
+        # print(f'Previous Distance: {self._wrap_dist}')
+        # print(f'Current Distance: {np.linalg.norm(obs[:3] - obs[-24:-21], axis=0)}')
+        # print(f'New Goal Position: {obs[-12:]}')
+        # print(f'New Distance: {np.linalg.norm(obs[:3] - obs[-12:-9], axis=0)}')
+        if self.if_chunk == 'traj':
+            self.idx_chunk_goal = self.obs_goal_horizon
+            self.chunk_goal = obs[12*self.idx_chunk_goal:]
+            obs = np.concatenate([obs[:24], self.chunk_goal])
+            # print(f'In RESET Chunk Idx: {self.idx_chunk_goal}')
+            # print(f'In RESET Current Chunk Goal: {self.chunk_goal}')
+            self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
+        elif self.if_chunk == 'waypoints':
+            obs = np.concatenate([obs[:24], self.chunk_goal, np.zeros(9, dtype=np.float32)])
+            if self._wrap_ctr_step == self.idx_wp2traj: # If we arrive the waypoint index
+                self.idx_chunk_goal += 1 if self.idx_chunk_goal < self.waypoints.shape[0]-1 else 0
+                self.chunk_goal = self.waypoints[self.idx_chunk_goal,:]
+                self.idx_wp2traj = self.wp_traj_idx[self.idx_chunk_goal]
+                # Update the distance to the next chunk
                 self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
-            elif self.if_chunk == 'waypoints':
-                obs = np.concatenate([obs[:24], self.chunk_goal, np.zeros(9, dtype=np.float32)])
-                if self._wrap_ctr_step == self.idx_wp2traj: # If we arrive the waypoint index
-                    self.idx_chunk_goal += 1 if self.idx_chunk_goal < self.waypoints.shape[0]-1 else 0
-                    self.chunk_goal = self.waypoints[self.idx_chunk_goal,:]
-                    self.idx_wp2traj = self.wp_traj_idx[self.idx_chunk_goal]
-                    # Update the distance to the next chunk
-                    self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
-        else:
-            raise NotImplementedError
-            obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)
+        #endregion
+        #region Recalculate Trajectory
         if self._current_gate_idx != -1:
             recalc = False if (info['gates_pose'][self._current_gate_idx,:2] == self.gates[self._current_gate_idx, :2]).all() else True
             if recalc:
@@ -591,8 +611,10 @@ class DroneRacingObservationWrapper:
                 self.X_GOAL, self.waypoints = calc_best_path(self.gates, self.obstacles, self.start_point, t=self.t, plot=False)
                 # convert path resulted from splev to x,y,z points
                 assert max(self.X_GOAL[:,2]) < 2.5, "Drone must stay below the ceiling"
+                self.wp_traj_idx = find_closest_traj_point(self.waypoints, self.X_GOAL)
+        #endregion
         return obs, reward, done, info, action
-
+#region Action Wrapper
 class ActionWrapper(ActionWrapper):
     def __init__(self, env):
         super().__init__(env)
@@ -632,6 +654,7 @@ class ActionWrapper(ActionWrapper):
         if check_mask2.any():
             action[check_mask2] = -1
         return np.float32(action)
+#endregion
 
 class MultiProcessingWrapper(Wrapper):
     """Wrapper to enable multiprocessing for vectorized environments.
