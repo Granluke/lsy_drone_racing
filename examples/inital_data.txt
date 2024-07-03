@@ -1,0 +1,48 @@
+"""LSY drone racing package for the Autonomous Drone Racing class @ TUM."""
+"""
+example_inital_info = {
+    'symbolic_model': "<safe_control_gym.math_and_models.symbolic_systems.SymbolicModel object at 0x7fe1a2fc5fd0>", 
+    'nominal_physical_parameters': {'quadrotor_mass': 0.03454, 'quadrotor_ixx_inertia': 1.4e-05, 
+                                    'quadrotor_iyy_inertia': 1.4e-05, 'quadrotor_izz_inertia': 2.17e-05}, 
+    'x_reference': array([ 0. ,  0. , -2. ,  0. ,  0.5,  0. ,  0. ,  0. ,  0. ,  0. ,  0. , 0. ]), 
+        'u_reference': array([0.084623, 0.084623, 0.084623, 0.084623]), 
+        'symbolic_constraints': [
+            "<function LinearConstraint.__init__.<locals>.<lambda> at 0x7fe1a1ef6160>",
+              "<function LinearConstraint.__init__.<locals>.<lambda> at 0x7fe1a2fadf70>"], 
+        'ctrl_timestep': 0.03333333333333333, 'ctrl_freq': 30, 'episode_len_sec': 33, 
+        'quadrotor_kf': 3.16e-10, 'quadrotor_km': 7.94e-12, 
+        'gate_dimensions': {'tall': {'shape': 'square', 'height': 1.0, 'edge': 0.45}, 
+                                  'low': {'shape': 'square', 'height': 0.525, 'edge': 0.45}
+                            }, 
+        'obstacle_dimensions': {'shape': 'cylinder', 'height': 1.05, 'radius': 0.05}, 
+        'nominal_gates_pos_and_type': [
+            [0.45, -1.0, 0, 0, 0, 2.35, 1], 
+            [1.0, -1.55, 0, 0, 0, -0.78, 0], 
+            [0.0, 0.5, 0, 0, 0, 0, 1], 
+            [-0.5, -0.5, 0, 0, 0, 3.14, 0]], 
+        'nominal_obstacles_pos': [[1.0, -0.5, 0, 0, 0, 0], 
+                                  [0.5, -1.5, 0, 0, 0, 0], 
+                                  [-0.5, 0, 0, 0, 0, 0], 
+                                  [0, 1.0, 0, 0, 0, 0]], 
+        'initial_state_randomization': Munch({'init_x': Munch({'distrib': 'uniform', 'low': -0.1, 'high': 0.1}), 
+                                              'init_y': Munch({'distrib': 'uniform', 'low': -0.1, 'high': 0.1}), 
+                                              'init_z': Munch({'distrib': 'uniform', 'low': 0.0, 'high': 0.02}), 
+                                              'init_phi': Munch({'distrib': 'uniform', 'low': -0.1, 'high': 0.1}), 
+                                              'init_theta': Munch({'distrib': 'uniform', 'low': -0.1, 'high': 0.1}), 
+                                              'init_psi': Munch({'distrib': 'uniform', 'low': -0.1, 'high': 0.1})}), 
+                                              'inertial_prop_randomization': Munch({'M': Munch({'distrib': 'uniform', 'low': -0.01, 'high': 0.01}), 
+                                                                                    'Ixx': Munch({'distrib': 'uniform', 'low': -1e-06, 'high': 1e-06}), 
+                                                                                    'Iyy': Munch({'distrib': 'uniform', 'low': -1e-06, 'high': 1e-06}), 
+                                                                                    'Izz': Munch({'distrib': 'uniform', 'low': -1e-06, 'high': 1e-06})}), 
+                                                                                    'gates_and_obs_randomization': Munch(
+                                                                                        {'gates': Munch({'distrib': 'uniform', 'low': -0.1, 'high': 0.1}), 
+                                                                                         'obstacles': Munch({'distrib': 'uniform', 'low': -0.1, 'high': 0.1})}), 
+                                                                                         'disturbances': Munch({'action': [Munch({'disturbance_func': 'white_noise', 'std': 0.001})],
+                                                                                                                 'dynamics': [Munch({'disturbance_func': 'uniform', 
+                                                                                                                                     'low': [-0.1, -0.1, -0.1], 
+                                                                                                                                     'high': [0.1, 0.1, 0.1]})]}), 
+                                                                                                                                     'urdf_dir': '/usr/local/Homebrew/Caskroom/miniforge/base/envs/drone/lib/python3.8/site-packages/safe_control_gym/envs/gym_pybullet_drones/assets',
+                                                                                                                                       'pyb_client': 0, 'constraint_values': array([-3.93390077, -3.99345386, -0.16960551, -2.06609923, -2.00654614,
+       -1.93039449])}
+
+"""
