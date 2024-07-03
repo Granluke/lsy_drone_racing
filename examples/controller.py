@@ -86,92 +86,28 @@ class Controller(BaseController):
         # REPLACE THIS (START) ##
         #########################
         self.iter_counter = 0
-        if X_GOAL is not None and waypoints is not None:
-            self.agent = PPO.load("./models/ppo_wp_lvl1_7s22.zip")
-            self.las = self.agent.action_space.high[0]
-            self.fas = 1 - self.las
-            print(f'LAS: {self.las}')
-            self.action_scale = np.array([1, 1, 1, np.pi])
-            self.X_GOAL = X_GOAL
-            self.waypoints = waypoints
-            self.RL = True
-            self.ref_x = self.X_GOAL[:, 0]
-            self.ref_y = self.X_GOAL[:, 1]  
-            self.ref_z = self.X_GOAL[:, 2]  
+        assert X_GOAL is not None and waypoints is not None, "X_GOAL and waypoints must be provided"
+        self.agent = PPO.load("./models/ppo_wp_lvl1_7s22.zip")
+        self.las = self.agent.action_space.high[0]
+        self.fas = 1 - self.las
+        print(f'LAS: {self.las}')
+        self.action_scale = np.array([1, 1, 1, np.pi])
+        self.X_GOAL = X_GOAL
+        self.waypoints = waypoints
+        self.RL = True
+        self.ref_x = self.X_GOAL[:, 0]
+        self.ref_y = self.X_GOAL[:, 1]  
+        self.ref_z = self.X_GOAL[:, 2]
         # Example: Hard-code waypoints through the gates. Obviously this is a crude way of
         # completing the challenge that is highly susceptible to noise and does not generalize at
         # all. It is meant solely as an example on how the drones can be controlled
-        else:
-            self.RL = False
-            waypoints = []
-            waypoints.append([self.initial_obs[0], self.initial_obs[1], 0.3])
-            gates = self.NOMINAL_GATES
-            z_low = initial_info["gate_dimensions"]["low"]["height"]
-            z_high = initial_info["gate_dimensions"]["tall"]["height"]
-            waypoints.append([1, 0, z_low])
-            waypoints.append([gates[0][0] + 0.2, gates[0][1] + 0.1, z_low])
-            waypoints.append([gates[0][0] + 0.1, gates[0][1], z_low])
-            waypoints.append([gates[0][0] - 0.1, gates[0][1], z_low])
-            waypoints.append(
-                [
-                    (gates[0][0] + gates[1][0]) / 2 - 0.7,
-                    (gates[0][1] + gates[1][1]) / 2 - 0.3,
-                    (z_low + z_high) / 2,
-                ]
-            )
-            waypoints.append(
-                [
-                    (gates[0][0] + gates[1][0]) / 2 - 0.5,
-                    (gates[0][1] + gates[1][1]) / 2 - 0.6,
-                    (z_low + z_high) / 2,
-                ]
-            )
-            waypoints.append([gates[1][0] - 0.3, gates[1][1] - 0.2, z_high])
-            waypoints.append([gates[1][0] + 0.2, gates[1][1] + 0.2, z_high])
-            waypoints.append([gates[2][0], gates[2][1] - 0.4, z_low])
-            waypoints.append([gates[2][0], gates[2][1] + 0.2, z_low])
-            waypoints.append([gates[2][0], gates[2][1] + 0.2, z_high + 0.2])
-            waypoints.append([gates[3][0], gates[3][1] + 0.1, z_high])
-            waypoints.append([gates[3][0], gates[3][1] - 0.1, z_high + 0.1])
-            waypoints.append(
-                [
-                    initial_info["x_reference"][0],
-                    initial_info["x_reference"][2],
-                    initial_info["x_reference"][4],
-                ]
-            )
-            waypoints.append(
-                [
-                    initial_info["x_reference"][0],
-                    initial_info["x_reference"][2] - 0.2,
-                    initial_info["x_reference"][4],
-                ]
-            )
-            waypoints = np.array(waypoints)
-
-            tck, u = interpolate.splprep([waypoints[:, 0], waypoints[:, 1], waypoints[:, 2]], s=0.1)
-            self.waypoints = waypoints
-            duration = 12
-            t = np.linspace(0, 1, int(duration * self.CTRL_FREQ))
-            self.ref_x, self.ref_y, self.ref_z = interpolate.splev(t, tck)
-            assert max(self.ref_z) < 2.5, "Drone must stay below the ceiling"
-
         self._take_off = False
         self._setpoint_land = False
         self._land = False
         
         if self.VERBOSE:
             # Draw the trajectory on PyBullet's GUI.
-            try:
-                draw_trajectory(initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
-            except TypeError:
-                pass
-
-        # x_goal = np.zeros((self.ref_x.shape[0], 12))
-        # x_goal[:,0] = self.ref_x
-        # x_goal[:,1] = self.ref_y
-        # x_goal[:,2] = self.ref_z
-        # self.x_goal = x_goal
+            draw_trajectory(initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
 
         #########################
         # REPLACE THIS (END) ####
@@ -220,28 +156,27 @@ class Controller(BaseController):
             step = iteration - 2 * self.CTRL_FREQ  # Account for 2s delay due to takeoff
             if ep_time - 2 > 0 and step < len(self.ref_x):
                 command_type = Command.FULLSTATE
-                if not self.RL:
-                    target_pos = np.array([self.ref_x[step], self.ref_y[step], self.ref_z[step]])
-                    target_vel = np.zeros(3)
-                    target_acc = np.zeros(3)
-                    target_yaw = 0.0
-                    target_rpy_rates = np.zeros(3)
-                    args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
-                    print(f'Next Position: {target_pos}')
-                else:
-                    self.iter_counter += 1
-                    action, _states = self.agent.predict(observation=obs)
-                    action = self.action_scale * action
-                    # Adding the first point in the horizon
-                    pos = self.action_scale[:-1] * obs[12:15]
+                self.iter_counter += 1
+                action, _states = self.agent.predict(observation=obs)
+                action = self.action_scale * action
+                # Adding the first point in the horizon
+                pos = self.action_scale[:-1] * obs[12:15]
+                if False:#self.RL:
                     pos = (self.las*obs[:3] + action[:3]) + self.fas*pos
-                    # pos = 0.0*(self.las*obs[:3] + action[:3]) + 1.0*pos
-                    yaw = np.arctan2(-(pos[1]-obs[1]), (pos[0]-obs[0]))
-                    # yaw = np.pi*action[3] + self.fas*yaw
-                    # print(f'Obs Next Goal: {obs[12:15]}')
-                    # print(f'X_GOAL: {self.X_GOAL[self.iter_counter,:3]}')
-                    # yaw = 0.0
-                    args = [pos, np.zeros(3), np.zeros(3), yaw, np.zeros(3), ep_time]
+                else:
+                    pos = 0.0*(self.las*obs[:3] + action[:3]) + 1.0*pos
+                yaw = np.arctan2(-(pos[1]-obs[1]), (pos[0]-obs[0]))
+                # yaw = 0.0
+                args = [pos, np.zeros(3), np.zeros(3), yaw, np.zeros(3), ep_time]
+            elif step >= len(self.ref_x) and not self._setpoint_land and info["task_completed"] == False:
+                print("Task not completed but reached the end of the path ins teps, continue to last reference point")
+                target_pos = np.array([self.ref_x[-1], self.ref_y[-1], self.ref_z[-1]])
+                target_vel = np.zeros(3)
+                target_acc = np.zeros(3)
+                target_yaw = 0.0
+                target_rpy_rates = np.zeros(3)
+                command_type = Command.FULLSTATE
+                args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
             # Notify set point stop has to be called every time we transition from low-level
             # commands to high-level ones. Prepares for landing
             elif step >= len(self.ref_x) and not self._setpoint_land:

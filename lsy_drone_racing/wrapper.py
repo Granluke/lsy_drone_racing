@@ -31,6 +31,7 @@ from safe_control_gym.envs.benchmark_env import Cost, Task
 
 from lsy_drone_racing.rotations import map2pi
 from lsy_drone_racing.create_waypoints import create_waypoints, find_closest_traj_point, find_closest_gate
+from lsy_drone_racing.path_planning import calc_best_path
 
 logger = logging.getLogger(__name__)
 
@@ -151,7 +152,7 @@ class DroneRacingWrapper(Wrapper):
         self.waypoints = None # Waypoints
         self.wp_traj_idx = None # Waypoint to Trajectory Index (waypoint corresponds to what trajectory point)
         self.wp_gate_dict = None # Waypoint to Gate Dictionary (waypoint corresponds to what gate)
-        self._current_gate = None # Current Gate Index
+        self._current_gate_idx = None # Current Gate Index
         self.chunk_goal = None # Chunk Goal
         self.idx_chunk_goal = None # Index of the Chunk Goal
         self.chunk_distance = None # Distance to the Chunk Goal
@@ -183,7 +184,7 @@ class DroneRacingWrapper(Wrapper):
         self.wp_gate_dict = find_closest_gate(self.X_GOAL, info, self.wp_traj_idx)
         if self.train_random_state: # Spawn the drone on randomly chosen waypoint
             # start_ind = np.random.randint(1, self.waypoints.shape[0]-2)
-            start_ind = 7
+            start_ind = 3
             start_pose = self.waypoints[start_ind,:3]
             start_indwp = self.wp_traj_idx[start_ind]
             self.waypoints = self.waypoints[start_ind:,:] # Crop the waypoints
@@ -196,10 +197,10 @@ class DroneRacingWrapper(Wrapper):
             obs, info = self.env.reset()
             # env.reset() cannot reset in the exact position, which leads to a mismatch.
             self.env.env.current_gate = self.wp_gate_dict[start_ind]
-            self._current_gate = self.wp_gate_dict[start_ind]
+            self._current_gate_idx = self.wp_gate_dict[start_ind]
         else:
             self.X_GOAL_crop = deepcopy(self.X_GOAL)
-            self._current_gate = info["current_gate_id"]
+            self._current_gate_idx = info["current_gate_id"]
         # Keep the horizon included in the obs
         if self.obs_goal_horizon > 0:
             self._wrap_ctr_step = 0
@@ -308,9 +309,9 @@ class DroneRacingWrapper(Wrapper):
             print(f'Observation {obs[9:12]} is not in the observation space!')
             terminated = True
         self._reset_required = terminated or truncated
-        if info["current_gate_id"] != self._current_gate:
-            self._current_gate = info["current_gate_id"]
-            print(f'Gate Passed! Current Gate Index: {self._current_gate}')
+        if info["current_gate_id"] != self._current_gate_idx:
+            self._current_gate_idx = info["current_gate_id"]
+            print(f'Gate Passed! Current Gate Index: {self._current_gate_idx}')
         # print(f'Chunk Index: {self.idx_chunk_goal}, Chunk Goal: {self.chunk_goal[:3]}')
         return obs, reward, terminated, truncated, info
 
@@ -509,7 +510,15 @@ class DroneRacingObservationWrapper:
         """
         obs, info = self.env.reset(*args, **kwargs)
         # Just need waypoints for drawing trajectory
-        self.X_GOAL, self.waypoints = create_waypoints(obs, info, self.env.ctrl_freq)
+        # self.X_GOAL, self.waypoints = create_waypoints(obs, info, self.env.ctrl_freq)
+        self.gates = info["nominal_gates_pos_and_type"]
+        self._current_gate_idx = info["current_gate_id"]
+        self.obstacles = info["nominal_obstacles_pos"]
+        self.start_point = [obs[0], obs[2], 0.3]
+        freq = self.env.ctrl_freq
+        self.duration = 12
+        self.t = np.linspace(0, 1, int(self.duration * freq))
+        self.X_GOAL, self.waypoints = calc_best_path(gates=self.gates, obstacles=self.obstacles, start_point=self.start_point, t=self.t, plot=False)
         self.wp_traj_idx = find_closest_traj_point(self.waypoints, self.X_GOAL)
         # self.wp_gate_dict = find_closest_gate(self.X_GOAL, info, self.wp_traj_idx)
         if self.obs_goal_horizon > 0:
@@ -548,7 +557,7 @@ class DroneRacingObservationWrapper:
         obs, reward, done, info, action = self.env.step(*args, **kwargs)
         curr_time = args[0] # Current Time
         if self.obs_goal_horizon > 0:
-            self._wrap_ctr_step += 1 if curr_time > 2 else self._wrap_ctr_step
+            self._wrap_ctr_step += 1 if curr_time > 2 else self._wrap_ctr_step # 2 seconds for takeoff
             obs = DroneRacingWrapper.observation_transform(obs, info, self.X_GOAL, self._wrap_ctr_step, self.obs_goal_horizon, self.inc_gate_obs).astype(np.float32)
             # print(f'Old Goal Position: {self.goal_pos}')
             # print(f'Obs -2: {obs[-24:-12]}')
@@ -564,14 +573,24 @@ class DroneRacingObservationWrapper:
                 # print(f'In RESET Current Chunk Goal: {self.chunk_goal}')
                 self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
             elif self.if_chunk == 'waypoints':
-                self.idx_chunk_goal = 1
-                self.chunk_goal = self.waypoints[self.idx_chunk_goal,:]
-                self.idx_wp2traj = self.wp_traj_idx[self.idx_chunk_goal]
-                self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
                 obs = np.concatenate([obs[:24], self.chunk_goal, np.zeros(9, dtype=np.float32)])
+                if self._wrap_ctr_step == self.idx_wp2traj: # If we arrive the waypoint index
+                    self.idx_chunk_goal += 1 if self.idx_chunk_goal < self.waypoints.shape[0]-1 else 0
+                    self.chunk_goal = self.waypoints[self.idx_chunk_goal,:]
+                    self.idx_wp2traj = self.wp_traj_idx[self.idx_chunk_goal]
+                    # Update the distance to the next chunk
+                    self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
         else:
             raise NotImplementedError
             obs = DroneRacingWrapper.observation_transform(obs, info).astype(np.float32)
+        if self._current_gate_idx != -1:
+            recalc = False if (info['gates_pose'][self._current_gate_idx,:2] == self.gates[self._current_gate_idx, :2]).all() else True
+            if recalc:
+                print(f"Gate {self._current_gate_idx} at {self.gates[self._current_gate_idx]} is not the same as {info['gates_pose'][self._current_gate_idx]}")    
+                self.gates[self._current_gate_idx, :-1] = info['gates_pose'][self._current_gate_idx]
+                self.X_GOAL, self.waypoints = calc_best_path(self.gates, self.obstacles, self.start_point, t=self.t, plot=False)
+                # convert path resulted from splev to x,y,z points
+                assert max(self.X_GOAL[:,2]) < 2.5, "Drone must stay below the ceiling"
         return obs, reward, done, info, action
 
 class ActionWrapper(ActionWrapper):

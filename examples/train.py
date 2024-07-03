@@ -81,9 +81,9 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
         vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui, random_train=random_train)),
                                      n_envs=PROCESSES_TO_TEST, vec_env_cls=SubprocVecEnv)
         train_env = vec_train_env
-    k = 5 # The learning iteration
+    k = 6 # The learning iteration
     save_path = './models'
-    save_name = '/ppo_wp_lvl1_7s_gate234' + str(k)
+    save_name = '/ppo_wp_lvl1_7s_gate1234' + str(k)
     load_path = save_path
     load_name = '/ppo_wp_lvl1_7s_gate234' + str(k-1) + '.zip'
     tb_log_name = save_name.split('/')[-1]

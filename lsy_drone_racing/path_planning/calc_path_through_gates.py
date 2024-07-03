@@ -306,8 +306,11 @@ def calc_best_path(gates, obstacles, start_point, t, plot=True):
     if plot:
         plot_gates_and_obstacles(gates, obstacles, path1, path, waypoints, before_after_points, go_around_points, intersection_points)
 
-
-    return path, waypoints
+    x_goal = np.zeros((len(path[0]), 12))
+    x_goal[:,0] = path[0]
+    x_goal[:,1] = path[1]
+    x_goal[:,2] = path[2]
+    return x_goal, waypoints
 
 
 
