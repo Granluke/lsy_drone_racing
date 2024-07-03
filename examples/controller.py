@@ -87,7 +87,7 @@ class Controller(BaseController):
         #########################
         self.iter_counter = 0
         if X_GOAL is not None and waypoints is not None:
-            self.agent = PPO.load("./models/ppo_wp_lvl1_7s1.zip")
+            self.agent = PPO.load("./models/ppo_wp_lvl1_7s22.zip")
             self.las = self.agent.action_space.high[0]
             self.fas = 1 - self.las
             print(f'LAS: {self.las}')

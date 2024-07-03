@@ -70,6 +70,40 @@ def create_waypoints(initial_obs: np.ndarray, initial_info: dict, ctrl_freq:int=
 def find_closest_traj_point(waypoints:np.ndarray, X_GOAL:np.ndarray) -> int:
     # Find the closest point in the trajectory to the drone's current position
     waypoints = waypoints[:,None] # create a tensor of shape (N,1,3)
-    dist = np.linalg.norm(waypoints[:, :2] - X_GOAL[:, :3], axis=2) # Do a tensor operation
+    dist = np.linalg.norm(waypoints - X_GOAL[:, :3], axis=2) # Do a tensor operation
     closest_idx = np.argmin(dist, axis=1) # Find the index of the minimum distance
     return closest_idx
+
+def find_closest_gate(X_GOAL:np.ndarray, initial_info:dict, waypoint_idx:np.array) -> dict:
+    # gates = initial_info["nominal_gates_pos_and_type"]
+    # gates = gates[:,:3][:,None] # create a tensor of shape (N,1,3)
+    # dist = np.linalg.norm(gates - X_GOAL[:,:3], axis=2) # Do a tensor operation
+    # closest_idx = np.argmin(dist, axis=1) # Find the index of the minimum distance
+    # # Closest_idx is the index of the goal positions, each gate is the closest to
+    # # Waypoint_idx is the index of the goal positions, each waypoint is the closest to
+    # wp_gate_match = {i:-1 for i in range(len(waypoint_idx))}
+    # wp_asd = -1*np.ones_like(waypoint_idx)
+    # gate_idx = 3
+    # for i in closest_idx[::-1]:
+    #     mask = waypoint_idx < i
+    #     wp_asd[mask] = gate_idx
+    #     gate_idx -= 1
+    # return waypoint_idx
+    wp_gate_match = {i:-1 for i in range(len(waypoint_idx))}
+    wp_gate_match[0] = 0
+    wp_gate_match[1] = 0
+    wp_gate_match[2] = 0
+    wp_gate_match[3] = 1
+    wp_gate_match[4] = 1
+    wp_gate_match[5] = 1
+    wp_gate_match[6] = 1
+    wp_gate_match[7] = 1
+    wp_gate_match[8] = 2
+    wp_gate_match[9] = 2
+    wp_gate_match[10] = 3
+    wp_gate_match[11] = 3
+    wp_gate_match[12] = 3
+    wp_gate_match[13] = -1
+    wp_gate_match[14] = -1
+    wp_gate_match[15] = -1
+    return wp_gate_match

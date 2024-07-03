@@ -65,7 +65,7 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
     ## Training parameters
     PROCESSES_TO_TEST = 2 # Number of vectorized environments to train
     NUM_EXPERIMENTS = 1  # RL algorithms can often be unstable, so we run several experiments (see https://arxiv.org/abs/1709.06560)
-    TRAIN_STEPS = 2**19  # Number of training steps
+    TRAIN_STEPS = 2**18  # Number of training steps
     EVAL_EPS = 5 # Number of episodes for evaluation
     ALGO = PPO
     n_steps = 2**10
@@ -73,18 +73,19 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
     ## Create Environments
     load_model = True
     if_validate = True
-    train_env = create_race_env(config_path=config_path, gui=gui, random_train=True)
+    random_train = True
+    train_env = create_race_env(config_path=config_path, gui=gui, random_train=random_train)
     check_env(train_env)
     if PROCESSES_TO_TEST > 1:
         train_env = MultiProcessingWrapper(train_env)
-        vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui)),
+        vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui, random_train=random_train)),
                                      n_envs=PROCESSES_TO_TEST, vec_env_cls=SubprocVecEnv)
         train_env = vec_train_env
-    k = 2 # The learning iteration
+    k = 5 # The learning iteration
     save_path = './models'
-    save_name = '/ppo_wp_lvl1_7s' + str(k)
+    save_name = '/ppo_wp_lvl1_7s_gate234' + str(k)
     load_path = save_path
-    load_name = '/ppo_wp_lvl1_7s' + str(k-1) + '.zip'
+    load_name = '/ppo_wp_lvl1_7s_gate234' + str(k-1) + '.zip'
     tb_log_name = save_name.split('/')[-1]
     checkpoint_callback = CheckpointCallback(save_freq=2**15, save_path=save_path+save_name,
                                          name_prefix='rl_model')
@@ -105,9 +106,10 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
         else:
             print(f'Loading model from {load_path+load_name}')
             model = ALGO.load(load_path+load_name, env=train_env)
-            model.ent_coef = 0.02
+            model.ent_coef = 0.05
+            model.learning_rate = 0.0001
             from stable_baselines3.common.utils import get_schedule_fn
-            model.clip_range = get_schedule_fn(0.15)
+            model.clip_range = get_schedule_fn(0.2)
         print(f'Starting experiment...')
         print(f'Log Name: {tb_log_name}')
         model.learn(total_timesteps=TRAIN_STEPS, progress_bar=True, tb_log_name=tb_log_name, callback=callback_list)
