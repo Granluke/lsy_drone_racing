@@ -70,7 +70,7 @@ def simulate(
     config.quadrotor_config["ctrl_freq"] = FIRMWARE_FREQ
     env_func = partial(make, "quadrotor", **config.quadrotor_config)
     inc_gate_obs = config.quadrotor_config["inc_gate_obs"]
-    env = DroneRacingObservationWrapper(make("firmware", env_func, FIRMWARE_FREQ, CTRL_FREQ), inc_gate_obs=inc_gate_obs)
+    env = DroneRacingObservationWrapper(make("firmware", env_func, FIRMWARE_FREQ, CTRL_FREQ))
     # Load the controller module
     path = Path(__file__).parents[1] / controller
     ctrl_class = load_controller(path)  # This returns a class, not an instance
@@ -130,7 +130,13 @@ def simulate(
                 stats["collisions"] += 1
                 stats["collision_objects"].add(info["collision"][0])
             stats["violations"] += "constraint_violation" in info and info["constraint_violation"]
-
+            # Check if the obs and args action match
+            if not len(args) == 2:
+                action_arg = args[:3]
+                next_step_obs = obs[12:15]
+                next_step_real = env.X_GOAL[ctrl.iter_counter]
+                # import pdb; pdb.set_trace() if not (next_step_real == next_step_obs).all() else None
+                # assert (next_step_real == next_step_obs).all(), f"Next step mismatch: {next_step_real} != {next_step_obs}"
             # Synchronize the GUI.
             if config.quadrotor_config.gui:
                 sync(i, ep_start, CTRL_DT)
@@ -140,7 +146,10 @@ def simulate(
                 info["task_completed"], lap_finished = True, True
             if info["task_completed"]:
                 done = True
-
+            body_rate = obs[9:12]
+            mask1 = np.abs(body_rate) > 10
+            if mask1.any():
+                print(f"Body rate is too high: {body_rate}")
         # Learn after the episode if the controller supports it
         ctrl.episode_learn()  # Update the controller internal state and models.
         log_episode_stats(stats, info, config, curr_time, lap_finished)

@@ -88,11 +88,11 @@ class Controller(BaseController):
         #########################
         self.iter_counter = 0
         assert X_GOAL is not None and waypoints is not None, "X_GOAL and waypoints must be provided"
-        self.agent = PPO.load("./models/ppo_wp_lvl1_7s22.zip")
+        self.agent = PPO.load("./models/ppo_lvl1_6s_iter1.zip")
         self.las = self.agent.action_space.high[0]
         self.fas = 1 - self.las
         print(f'LAS: {self.las}')
-        self.action_scale = np.array([1, 1, 1, np.pi])
+        self.action_scale = np.array([1, 1, 1])
         self.X_GOAL = X_GOAL
         self.waypoints = waypoints
         self.RL = True
@@ -157,21 +157,22 @@ class Controller(BaseController):
             step = iteration - TAKEOFF_DURATION * self.CTRL_FREQ  # Account for 2s delay due to takeoff
             if ep_time - TAKEOFF_DURATION > 0 and step < len(self.ref_x):
                 command_type = Command.FULLSTATE
-                self.iter_counter += 1
+                self.iter_counter += 1 # Only for debugging
                 action, _states = self.agent.predict(observation=obs)
                 action = self.action_scale * action
                 # Adding the first point in the horizon
-                pos = self.action_scale[:-1] * obs[12:15]
-                if False:#self.RL:
+                pos = self.action_scale * obs[12:15]
+                if self.RL and False:
                     pos = (self.las*obs[:3] + action[:3]) + self.fas*pos
                 else:
-                    pos = 0.0*(self.las*obs[:3] + action[:3]) + 1.0*pos
+                    # pos = self.action_scale*self.X_GOAL[step]
+                    pos = pos
                 yaw = np.arctan2(-(pos[1]-obs[1]), (pos[0]-obs[0]))
                 # yaw = 0.0
                 args = [pos, np.zeros(3), np.zeros(3), yaw, np.zeros(3), ep_time]
             elif step >= len(self.ref_x) and not self._setpoint_land and info["task_completed"] == False:
                 print("Task not completed but reached the end of the path ins teps, continue to last reference point")
-                target_pos = np.array([self.ref_x[-1], self.ref_y[-1], self.ref_z[-1]])
+                target_pos = self.action_scale*np.array([self.ref_x[-1], self.ref_y[-1], self.ref_z[-1]])
                 target_vel = np.zeros(3)
                 target_acc = np.zeros(3)
                 target_yaw = 0.0
