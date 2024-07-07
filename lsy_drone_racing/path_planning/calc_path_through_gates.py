@@ -5,7 +5,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.interpolate import splprep, splev
 from math import sqrt
 
-obstacle_dimensions = {'shape': 'cylinder', 'height': 1.05, 'radius': 0.05}
+OBSTACLE_DIMENSIONS = {'shape': 'cylinder', 'height': 1.05, 'radius': 0.05}
 
 def create_gate(x, y, yaw, gate_type):
     if gate_type == 0:
@@ -63,10 +63,10 @@ def point_in_gate(point, gate_center, yaw, height, buffer):
     
     local_point = np.dot(yaw_matrix, rel_point)
 
-    print(local_point)
-    print(gate_center[2] - gate_height / 2)
-    print(point[2])
-    print((gate_center[2] - gate_height / 2) <= point[2] <= (gate_center[2] + gate_height / 2))
+    # print(local_point)
+    # print(gate_center[2] - gate_height / 2)
+    # print(point[2])
+    # print((gate_center[2] - gate_height / 2) <= point[2] <= (gate_center[2] + gate_height / 2))
 
     return (-gate_width / 2 <= local_point[0] <= gate_width / 2 and
             (gate_center[2] - gate_height / 2) <= point[2] <= (gate_center[2] + gate_height / 2))
@@ -93,14 +93,15 @@ def create_waypoints(gates, start_point):
     before_after_points = []
     go_around_points = []
     intersection_points = []
+    waypoint_gate_index = [0]
     avoidance_distance = 0.15
 
     for i, gate in enumerate(gates):
-        generate_gate_waypoints(gates, waypoints, buffer, before_after_points, go_around_points, intersection_points, avoidance_distance, i, gate)
+        generate_gate_waypoints(gates, waypoints, buffer, before_after_points, go_around_points, intersection_points, avoidance_distance, i, gate, waypoint_gate_index)
 
-    return np.array(waypoints), before_after_points, go_around_points, intersection_points
+    return np.array(waypoints), before_after_points, go_around_points, intersection_points, waypoint_gate_index
 
-def generate_gate_waypoints(gates, waypoints, buffer, before_after_points, go_around_points, intersection_points, avoidance_distance, i, gate):
+def generate_gate_waypoints(gates, waypoints, buffer, before_after_points, go_around_points, intersection_points, avoidance_distance, i, gate, waypoint_gate_index):
     x, y, z_center, roll, pitch, yaw, gate_type = gate
     if gate_type == 0:
         height = 1.0
@@ -117,24 +118,46 @@ def generate_gate_waypoints(gates, waypoints, buffer, before_after_points, go_ar
 
     if dist_tmp_wp_2 < dist_tmp_wp_1:
         after_wp = tmp_wp_1
+        # double the buffer for the before_wp
+        #before_wp = [x + 2 * buffer * np.sin(yaw), y - 2 * buffer * np.cos(yaw), z]
         before_wp = tmp_wp_2
     else:
+        # double the buffer for the before_wp
+        #before_wp = [x - 2 * buffer * np.sin(yaw), y + 2 * buffer * np.cos(yaw), z]
         before_wp = tmp_wp_1
         after_wp = tmp_wp_2
+
+    # check if last before_wp has distance of more then 2 to the last waypoint then put a waypoint in beweteen at half distance
+    if len(waypoints) >= 1:
+        last_wp = waypoints[-1]
+        dist_last_wp_before_wp = np.linalg.norm([last_wp[0] - before_wp[0], last_wp[1] - before_wp[1]])
+        if dist_last_wp_before_wp > 1.4:
+            waypoints.append([(last_wp[0] + before_wp[0]) / 2, (last_wp[1] + before_wp[1]) / 2, (last_wp[2] + before_wp[2]) / 2])
+    
         
     waypoints.append(before_wp)
     waypoints.append([x, y, z])
     waypoints.append(after_wp)
+    
+    # waypoint_gate_index append i 3 times
+    waypoint_gate_index.append(i)
+    waypoint_gate_index.append(i)
+    waypoint_gate_index.append(i)
+
+    
+
 
     before_after_points.append((before_wp, after_wp))
         
         # Check if the line to the next gate goes through the current gate
     if i < len(gates) - 1:
-        check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, intersection_points, avoidance_distance, i, x, y, z_center, yaw, height, z, after_wp)
+        check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, intersection_points, avoidance_distance, i, x, y, z_center, yaw, height, z, after_wp, waypoint_gate_index)
     else:
         go_around_points.append(([]))
 
-def check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, intersection_points, avoidance_distance, i, x, y, z_center, yaw, height, z, after_wp):
+   
+
+def check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, intersection_points, avoidance_distance, i, x, y, z_center, yaw, height, z, after_wp, waypoint_gate_index):
     next_gate = gates[i + 1]
     next_x, next_y, next_z_center, next_roll, next_pitch, next_yaw, next_gate_type = next_gate
     line_start = np.array([after_wp[0], after_wp[1], after_wp[2]])
@@ -158,6 +181,7 @@ def check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, i
         avoidance_wp = plane_point + intersection_vector * (0.45/sqrt(2) + avoidance_distance)
 
         waypoints.append(avoidance_wp)
+        waypoint_gate_index.append(i)
         go_around_points.append((avoidance_wp))
     else:
         go_around_points.append(([]))
@@ -191,8 +215,8 @@ def plot_gates_and_obstacles(gates, obstacles, path_before_obstacle_avoidance, p
     
     for cylinder in obstacles:
         x, y, z, roll, pitch, yaw = cylinder
-        height = obstacle_dimensions['height']
-        radius = obstacle_dimensions['radius']
+        height = OBSTACLE_DIMENSIONS['height']
+        radius = OBSTACLE_DIMENSIONS['radius']
         x_grid, y_grid, z_grid = create_cylinder(x, y, z, height, radius)
         ax.plot_surface(x_grid, y_grid, z_grid, color='b', alpha=0.5)
         all_points.append(np.column_stack((x_grid.flatten(), y_grid.flatten(), z_grid.flatten())))
@@ -225,8 +249,8 @@ def plot_gates_and_obstacles(gates, obstacles, path_before_obstacle_avoidance, p
     plt.show()
 
 def check_path_collision(path, obstacles, buffer=0.25):
-    height = obstacle_dimensions['height']
-    radius = obstacle_dimensions['radius']
+    height = OBSTACLE_DIMENSIONS['height']
+    radius = OBSTACLE_DIMENSIONS['radius']
     radius = radius + buffer
     for cylinder in obstacles:
         x_c, y_c, z_c, _, _, _ = cylinder
@@ -237,33 +261,74 @@ def check_path_collision(path, obstacles, buffer=0.25):
                 return True
     return False
 
-def adjust_waypoints(waypoints, obstacles, buffer=0.25):
+def adjust_waypoints(waypoints, obstacles, gates, waypoint_gate_index, buffer=0.35) -> np.ndarray:
     extra_buffer = 0.2
     adjusted_waypoints = []
-    height = obstacle_dimensions['height']
-    radius = obstacle_dimensions['radius']
+    height = OBSTACLE_DIMENSIONS['height']
+    radius = OBSTACLE_DIMENSIONS['radius']
     radius = radius + buffer
-    for waypoint in waypoints:
+    for i, waypoint in enumerate(waypoints):
         x, y, z = waypoint
         collision = False
         for cylinder in obstacles:
             x_c, y_c, z_c, _, _, _ = cylinder
             if (x - x_c) ** 2 + (y - y_c) ** 2 <= radius ** 2 and 0 <= z <= height:
                 collision = True
-                print(f"Collision at {x}, {y}, {z}")
-                # Adjust the waypoint by moving it away from the cylinder
-                angle = np.arctan2(y - y_c, x - x_c)
-                x += np.cos(angle) * extra_buffer
-                y += np.sin(angle) * extra_buffer
+                print(f"Collision at {x}, {y}, {z} for waypoint {waypoint}")
+                # Adjust the waypoint by moving it away from the cylinder so that buffer is incorporated but parallel to the gate
+                gate = gates[waypoint_gate_index[i]]
+                _, _, _, _, _, yaw, _ = gate
+                adjusted_waypoint = find_intersection_with_buffer(waypoint, x_c, y_c, yaw, buffer)
+                x, y, z = adjusted_waypoint
                 print(f"Adjusted to {x}, {y}, {z}")
         adjusted_waypoints.append([x, y, z])
     return np.array(adjusted_waypoints)
 
-def adjust_path(path, obstacles, buffer=0.25):
-    extra_buffer = 0.42
+def find_intersection_with_buffer(waypoint, x_c, y_c, yaw, buffer):
+    # Line parameters
+    x1, y1, z = waypoint
+    m = np.tan(yaw)
+    b = y1 - m * x1
+    
+    # Circle parameters
+    r = buffer
+    
+    # Solve for intersection points
+    A = 1 + m**2
+    B = 2 * (m * b - m * y_c - x_c)
+    C = x_c**2 + y_c**2 + b**2 - 2 * b * y_c - r**2
+    
+    discriminant = B**2 - 4 * A * C
+    
+    if discriminant < 0:
+        # No intersection
+        return waypoint
+    
+    # Calculate the two intersection points
+    sqrt_discriminant = np.sqrt(discriminant)
+    x_inter1 = (-B + sqrt_discriminant) / (2 * A)
+    x_inter2 = (-B - sqrt_discriminant) / (2 * A)
+    
+    y_inter1 = m * x_inter1 + b
+    y_inter2 = m * x_inter2 + b
+    
+    inter_point1 = np.array([x_inter1, y_inter1, z])
+    inter_point2 = np.array([x_inter2, y_inter2, z])
+    
+    # Choose the intersection point that is on the buffer
+    distance1 = np.linalg.norm(inter_point1 - waypoint)
+    distance2 = np.linalg.norm(inter_point2 - waypoint)
+    
+    if distance1 < distance2:
+        return inter_point1
+    else:
+        return inter_point2
+
+def adjust_path(path, obstacles, buffer=0.45) -> np.ndarray:
+    extra_buffer = 0.3
     adjusted_path = [[], [], []]
-    height = obstacle_dimensions['height']
-    radius = obstacle_dimensions['radius']
+    height = OBSTACLE_DIMENSIONS['height']
+    radius = OBSTACLE_DIMENSIONS['radius']
     radius = radius + buffer
     r_squared = radius ** 2
     for x, y, z in zip(*path):
@@ -290,8 +355,9 @@ def adjust_path(path, obstacles, buffer=0.25):
 
 def calc_best_path(gates, obstacles, start_point, t, plot=True):
     print("Starting point", start_point)
-    waypoints, before_after_points, go_around_points, intersection_points = create_waypoints(gates, start_point)
-    tck, u = splprep(waypoints.T, s=0)
+    waypoints, before_after_points, go_around_points, intersection_points, waypoint_gate_index = create_waypoints(gates, start_point)
+    waypoints = adjust_waypoints(waypoints, obstacles, gates, waypoint_gate_index)
+    tck, u = splprep(waypoints.T, s=0.2)
     
     path1 = splev(t, tck)
     path = path1
@@ -299,7 +365,7 @@ def calc_best_path(gates, obstacles, start_point, t, plot=True):
         print("Path collides with obstacles, adjusting waypoints...")
         path = adjust_path(path, obstacles)
         # recompute splprep and path with splev
-        tck, u = splprep(path, s=0)
+        tck, u = splprep(path, s=0.2)
         path3 = splev(t, tck)
         path = path3
 
@@ -329,6 +395,6 @@ duration = 10
 CTRL_FREQ = 30
 T = np.linspace(0, 1, int(duration * CTRL_FREQ))
 
-START_POINT = [0.9339007658017658, 0.9934538571454128, 0.1]
+START_POINT = [0.9339007658017658, 0.9934538571454128, 0.05]
 
 #calc_best_path(GATES, OBSTACLES, START_POINT, T, plot=True)
