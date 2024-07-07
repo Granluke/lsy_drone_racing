@@ -15,6 +15,11 @@ def plot_gates_and_obstacles(csv_file):
     gates_list = []
     path_labels = []
     gate_labels = []
+    waypoints = []
+
+    # parse waypoints
+    if 'Last Waypoints' in df.columns:
+        waypoints = ast.literal_eval(df['Last Waypoints'][0])
 
     # Parse obstacles
     if 'Obstacles' in df.columns:
@@ -26,11 +31,11 @@ def plot_gates_and_obstacles(csv_file):
 
     # Extract paths
     for i in range(len(path_columns) // 3):
-        path_x = ast.literal_eval(df[f'Path_{i*2}_x'].to_list()[0])
-        path_y = ast.literal_eval(df[f'Path_{i*2}_y'].to_list()[0])
-        path_z = ast.literal_eval(df[f'Path_{i*2}_z'].to_list()[0])
+        path_x = ast.literal_eval(df[f'Path_{i*2 + 1}_x'].to_list()[0])
+        path_y = ast.literal_eval(df[f'Path_{i*2 + 1}_y'].to_list()[0])
+        path_z = ast.literal_eval(df[f'Path_{i*2 + 1}_z'].to_list()[0])
         paths.append((path_x, path_y, path_z))
-        path_labels.append(f'Path_{i*2}')
+        path_labels.append(f'Path_{i*2 + 1}')
 
     # Extract gates
     for gate_col in gate_columns:
@@ -67,7 +72,7 @@ def plot_gates_and_obstacles(csv_file):
         ax.plot_surface(x_grid, y_grid, z_grid, color='b', alpha=0.5)
         all_points.append(np.column_stack((x_grid.flatten(), y_grid.flatten(), z_grid.flatten())))
 
-   
+    
 
     for path, color, label in zip(paths, gate_colors, path_labels):
         ax.plot(path[0], path[1], path[2], color=color, label=label)
@@ -90,6 +95,8 @@ def plot_gates_and_obstacles(csv_file):
     ax.set_zlabel('Z')
 
     plt.legend()
+    for waypoint in waypoints:
+        ax.plot(waypoint[0], waypoint[1], waypoint[2], 'o', label='Waypoints', color='red')
     plt.show()
 
 

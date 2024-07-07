@@ -133,6 +133,7 @@ def generate_gate_waypoints(gates, waypoints, buffer, before_after_points, go_ar
         dist_last_wp_before_wp = np.linalg.norm([last_wp[0] - before_wp[0], last_wp[1] - before_wp[1]])
         if dist_last_wp_before_wp > 1.4:
             waypoints.append([(last_wp[0] + before_wp[0]) / 2, (last_wp[1] + before_wp[1]) / 2, (last_wp[2] + before_wp[2]) / 2])
+            waypoint_gate_index.append(i)
     
         
     waypoints.append(before_wp)
@@ -274,7 +275,7 @@ def adjust_waypoints(waypoints, obstacles, gates, waypoint_gate_index, buffer=0.
             x_c, y_c, z_c, _, _, _ = cylinder
             if (x - x_c) ** 2 + (y - y_c) ** 2 <= radius ** 2 and 0 <= z <= height:
                 collision = True
-                print(f"Collision at {x}, {y}, {z} for waypoint {waypoint}")
+                print(f"Collision at {x}, {y}, {z} for waypoint {waypoint} at gate {waypoint_gate_index[i]} with index {i}")
                 # Adjust the waypoint by moving it away from the cylinder so that buffer is incorporated but parallel to the gate
                 gate = gates[waypoint_gate_index[i]]
                 _, _, _, _, _, yaw, _ = gate
@@ -318,7 +319,9 @@ def find_intersection_with_buffer(waypoint, x_c, y_c, yaw, buffer):
     # Choose the intersection point that is on the buffer
     distance1 = np.linalg.norm(inter_point1 - waypoint)
     distance2 = np.linalg.norm(inter_point2 - waypoint)
-    
+    print(f"Distances: {distance1}, {distance2}")
+    print(f"Intersections: {inter_point1}, {inter_point2}")
+
     if distance1 < distance2:
         return inter_point1
     else:

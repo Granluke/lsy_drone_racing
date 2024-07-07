@@ -103,10 +103,10 @@ class Controller(BaseController):
         gates = self.NOMINAL_GATES
         t = np.linspace(0, 1, int(TARGET_DURATION * self.CTRL_FREQ))
 
-        path, waypoints = calc_best_path(gates, self.NOMINAL_OBSTACLES, start_point, t=t, plot=True)
+        path, waypoints = calc_best_path(gates, self.NOMINAL_OBSTACLES, start_point, t=t, plot=False)
         self.waypoints = waypoints
 
-        self.append_new_path_and_gates_to_csv(path, self.ACTUAL_GATES, 'paths_gates.csv', obstacles=self.NOMINAL_OBSTACLES)
+        self.append_new_path_and_gates_to_csv(path, self.ACTUAL_GATES, 'paths_gates.csv', obstacles=self.NOMINAL_OBSTACLES, waypoints=waypoints)
         # convert path resulted from splev to x,y,z points
         self.ref_x, self.ref_y, self.ref_z = path
         assert max(self.ref_z) < 2.5, "Drone must stay below the ceiling"
@@ -123,7 +123,7 @@ class Controller(BaseController):
         #########################
     
     # Funktion zum Speichern der aktualisierten Pfade und Tore
-    def append_new_path_and_gates_to_csv(self, new_path, actual_gates, file_name, obstacles=None):
+    def append_new_path_and_gates_to_csv(self, new_path, actual_gates, file_name, obstacles=None, waypoints=None):
         # Überprüfen, ob die CSV-Datei bereits existiert
         if os.path.isfile(file_name) and obstacles is None:
             # Lesen der existierenden CSV-Datei in ein DataFrame
@@ -133,12 +133,16 @@ class Controller(BaseController):
             df = pd.DataFrame()
             df["Obstacles"] = pd.Series([json.dumps(obstacles)])
 
+        
+        df["Last Waypoints"] = pd.Series([json.dumps(waypoints.tolist())])
+
         # Hinzufügen der neuen Daten als Spalten
         x = new_path[0].tolist()
         y = new_path[1].tolist()
         z = new_path[2].tolist()
         
         column_index = len(df.columns) // 2
+
 
         # save x, y, z path as path_i_x, path_i_y, path_i_z
         df[f'Path_{column_index}_x'] = pd.Series([json.dumps(x)])
@@ -217,7 +221,7 @@ class Controller(BaseController):
                     t = np.linspace(0, 1, int(TARGET_DURATION * self.CTRL_FREQ))
 
                     path, waypoints = calc_best_path(self.ACTUAL_GATES, self.NOMINAL_OBSTACLES, start_point, t=t, plot=False)
-                    self.append_new_path_and_gates_to_csv(path, self.ACTUAL_GATES, 'paths_gates.csv', obstacles=None)
+                    self.append_new_path_and_gates_to_csv(path, self.ACTUAL_GATES, 'paths_gates.csv', obstacles=None, waypoints=waypoints)
                     self.waypoints = waypoints
                     # convert path resulted from splev to x,y,z points
                     self.ref_x, self.ref_y, self.ref_z = path
