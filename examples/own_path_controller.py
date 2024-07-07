@@ -33,8 +33,11 @@ from scipy import interpolate
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
 from lsy_drone_racing.utils import draw_trajectory
-from lsy_drone_racing.path_planning import calc_best_path
-
+from lsy_drone_racing.path_planning import calc_best_path, PIDController
+import csv
+import pandas as pd
+import os
+import json
 # added by me for not using reference to dict
 import copy
 
@@ -77,6 +80,7 @@ class Controller(BaseController):
 
         # Store a priori scenario information.
         self.NOMINAL_GATES = initial_info["nominal_gates_pos_and_type"]
+        self.ACTUAL_GATES = initial_info["nominal_gates_pos_and_type"]
         self.NOMINAL_OBSTACLES = initial_info["nominal_obstacles_pos"]
 
         # Reset counters and buffers.
@@ -90,12 +94,19 @@ class Controller(BaseController):
         # Example: Hard-code waypoints through the gates. Obviously this is a crude way of
         # completing the challenge that is highly susceptible to noise and does not generalize at
         # all. It is meant solely as an example on how the drones can be controlled
+
+        
+
+        self.pid = PIDController()
+
         start_point = [self.initial_obs[0], self.initial_obs[2], START_TO_HEIGHT] 
         gates = self.NOMINAL_GATES
         t = np.linspace(0, 1, int(TARGET_DURATION * self.CTRL_FREQ))
 
         path, waypoints = calc_best_path(gates, self.NOMINAL_OBSTACLES, start_point, t=t, plot=False)
         self.waypoints = waypoints
+
+        self.append_new_path_and_gates_to_csv(path, self.ACTUAL_GATES, 'paths_gates.csv', obstacles=self.NOMINAL_OBSTACLES, waypoints=waypoints)
         # convert path resulted from splev to x,y,z points
         self.ref_x, self.ref_y, self.ref_z = path
         assert max(self.ref_z) < 2.5, "Drone must stay below the ceiling"
@@ -110,6 +121,40 @@ class Controller(BaseController):
         #########################
         # REPLACE THIS (END) ####
         #########################
+    
+    # Funktion zum Speichern der aktualisierten Pfade und Tore
+    def append_new_path_and_gates_to_csv(self, new_path, actual_gates, file_name, obstacles=None, waypoints=None):
+        # Überprüfen, ob die CSV-Datei bereits existiert
+        if os.path.isfile(file_name) and obstacles is None:
+            # Lesen der existierenden CSV-Datei in ein DataFrame
+            df = pd.read_csv(file_name)
+        else:
+            # Erstellen eines neuen DataFrame, wenn die Datei nicht existiert
+            df = pd.DataFrame()
+            df["Obstacles"] = pd.Series([json.dumps(obstacles)])
+
+        
+        df["Last Waypoints"] = pd.Series([json.dumps(waypoints.tolist())])
+
+        # Hinzufügen der neuen Daten als Spalten
+        x = new_path[0].tolist()
+        y = new_path[1].tolist()
+        z = new_path[2].tolist()
+        
+        column_index = len(df.columns) // 2
+
+
+        # save x, y, z path as path_i_x, path_i_y, path_i_z
+        df[f'Path_{column_index}_x'] = pd.Series([json.dumps(x)])
+        df[f'Path_{column_index}_y'] = pd.Series([json.dumps(y)])
+        df[f'Path_{column_index}_z'] = pd.Series([json.dumps(z)])
+        
+        print(actual_gates, "Actual Gates")
+        actual_gates_new = [[float(e) for e in ele] for ele in actual_gates]
+        df[f'Gates_{column_index}'] = pd.Series([json.dumps(actual_gates_new)])
+
+        # Speichern des aktualisierten DataFrames zurück in die CSV-Datei
+        df.to_csv(file_name, index=False)
 
     def compute_control(
         self,
@@ -145,7 +190,7 @@ class Controller(BaseController):
 
         if not self._take_off:
             command_type = Command.TAKEOFF
-            args = [0.1, 1]  # Height, duration
+            args = [START_TO_HEIGHT, 0.8]  # Height, duration
             self._take_off = True  # Only send takeoff command once
         else:
             step = iteration - 1 * self.CTRL_FREQ  # Account for 1s delay due to takeoff
@@ -160,34 +205,42 @@ class Controller(BaseController):
 
                 if current_target_gate_pos == nominal_gate_pos:
                     target_pos = np.array([self.ref_x[step], self.ref_y[step], self.ref_z[step]])
+                    control_output = self.pid.compute_control(target_pos, obs)
+                    #print("Control Output 1:", control_output)
+                    #print("Target Pos:", target_pos)
                     target_vel = np.zeros(3)
                     target_acc = np.zeros(3)
                     target_yaw = 0.0
                     target_rpy_rates = np.zeros(3)
                     command_type = Command.FULLSTATE
-                    args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
+                    args = [control_output, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
                 else:
                     print(f"Gate {current_target_gate_id} at {nominal_gate_pos} is not the same as {current_target_gate_pos}")
                     
                     start_point = [self.initial_obs[0], self.initial_obs[2], START_TO_HEIGHT] 
-                    gates = self.NOMINAL_GATES
-                    gates[current_target_gate_id] = current_target_gate_pos
+                    
+                    self.ACTUAL_GATES[current_target_gate_id] = current_target_gate_pos
                     t = np.linspace(0, 1, int(TARGET_DURATION * self.CTRL_FREQ))
 
-                    path, waypoints = calc_best_path(gates, self.NOMINAL_OBSTACLES, start_point, t=t, plot=False)
+                    path, waypoints = calc_best_path(self.ACTUAL_GATES, self.NOMINAL_OBSTACLES, start_point, t=t, plot=False)
+                    self.append_new_path_and_gates_to_csv(path, self.ACTUAL_GATES, 'paths_gates.csv', obstacles=None, waypoints=waypoints)
                     self.waypoints = waypoints
                     # convert path resulted from splev to x,y,z points
                     self.ref_x, self.ref_y, self.ref_z = path
                     assert max(self.ref_z) < 2.5, "Drone must stay below the ceiling"
-                    print(info, "Info")
+                    #print(info, "Info")
 
                     target_pos = np.array([self.ref_x[step], self.ref_y[step], self.ref_z[step]])
+                    control_output = self.pid.compute_control(target_pos, obs)
+
+
+                    #print("Control Output:", control_output)
                     target_vel = np.zeros(3)
                     target_acc = np.zeros(3)
                     target_yaw = 0.0
                     target_rpy_rates = np.zeros(3)
                     command_type = Command.FULLSTATE
-                    args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
+                    args = [control_output, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
                     #if self.VERBOSE:
                         # Draw the trajectory on PyBullet's GUI.
                         #draw_trajectory(self.initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
