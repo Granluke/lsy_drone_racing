@@ -97,7 +97,7 @@ def find_closest_gate(X_GOAL:np.ndarray, initial_info:dict, waypoint_idx:np.arra
     wp_gate_match[4] = 1
     wp_gate_match[5] = 1
     wp_gate_match[6] = 1
-    wp_gate_match[7] = 1
+    wp_gate_match[7] = 2
     wp_gate_match[8] = 2
     wp_gate_match[9] = 2
     wp_gate_match[10] = 3
@@ -105,5 +105,5 @@ def find_closest_gate(X_GOAL:np.ndarray, initial_info:dict, waypoint_idx:np.arra
     wp_gate_match[12] = 3
     wp_gate_match[13] = -1
     wp_gate_match[14] = -1
-    wp_gate_match[15] = -1
+    # wp_gate_match[15] = -1
     return wp_gate_match

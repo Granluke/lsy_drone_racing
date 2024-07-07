@@ -71,9 +71,9 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
     n_steps = 2**10
     batch_size = n_steps // 2**4
     ## Create Environments
-    load_model = True
+    load_model = False
     if_validate = True
-    random_train = False
+    random_train = True
     train_env = create_race_env(config_path=config_path, gui=gui, random_train=random_train)
     check_env(train_env)
     if PROCESSES_TO_TEST > 1:
@@ -81,9 +81,9 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
         vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui, random_train=random_train)),
                                      n_envs=PROCESSES_TO_TEST, vec_env_cls=SubprocVecEnv)
         train_env = vec_train_env
-    k = 2 # The learning iteration
+    k = 3 # The learning iteration
     save_path = './models'
-    save_name = '/ppo_lvl1_6s_iter' + str(k)
+    save_name = '/ppo_lvl1_6s_wp_7_iter' + str(k)
     load_path = save_path
     load_name = '/ppo_lvl1_6s_iter' + str(k-1) + '.zip'
     tb_log_name = save_name.split('/')[-1]

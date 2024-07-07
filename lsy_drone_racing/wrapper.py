@@ -189,7 +189,6 @@ class DroneRacingWrapper(Wrapper):
         self._current_gate_idx = info["current_gate_id"]
         self.obstacles = info["nominal_obstacles_pos"]
         self.start_point = [obs[0], obs[2], obs[4]]
-        assert np.linalg.norm(self.start_point[2] - TAKEOFF_HEIGHT) < 0.1, "Takeoff height must be the start height for training!"
         freq = self.env.ctrl_freq
         ## Define times steps for the trajectory
         self.t = np.linspace(0, 1, int(DURATION * freq))
@@ -204,21 +203,24 @@ class DroneRacingWrapper(Wrapper):
         self.wp_gate_dict = find_closest_gate(self.X_GOAL, info, self.wp_traj_idx)
         if self.train_random_state: # Spawn the drone on randomly chosen waypoint
             # start_ind = np.random.randint(1, self.waypoints.shape[0]-2)
-            start_ind = 3
+            start_ind = 7
             start_pose = self.waypoints[start_ind,:3]
             start_indwp = self.wp_traj_idx[start_ind]
             self.waypoints = self.waypoints[start_ind:,:] # Crop the waypoints
             self.wp_traj_idx = self.wp_traj_idx[start_ind:] # Crop the waypoint indices
             self.X_GOAL_crop = self.X_GOAL[start_indwp:,:] # Crop the goal states
+            buffer = (self.env.env.INIT_X, self.env.env.INIT_Y, self.env.env.INIT_Z)
             self.env.env.INIT_X = start_pose[0] # Manual adjustment
             self.env.env.INIT_Y = start_pose[1]
             self.env.env.INIT_Z = start_pose[2]
             ## Reset again to change the env to the initial state
             obs, info = self.env.reset()
+            self.env.env.INIT_X, self.env.env.INIT_Y, self.env.env.INIT_Z = buffer
             # env.reset() cannot reset in the exact position, which leads to a mismatch.
             self.env.env.current_gate = self.wp_gate_dict[start_ind]
             self._current_gate_idx = self.wp_gate_dict[start_ind]
         else:
+            assert np.linalg.norm(self.start_point[2] - TAKEOFF_HEIGHT) < 0.1, "Takeoff height must be the start height for training!"
             self.X_GOAL_crop = deepcopy(self.X_GOAL)
             self._current_gate_idx = info["current_gate_id"]
         #endregion
@@ -336,7 +338,7 @@ class DroneRacingWrapper(Wrapper):
         if self._current_gate_idx != -1:
             recalc = False if (info['gates_pose'][self._current_gate_idx,:2] == self.gates[self._current_gate_idx, :2]).all() else True
             # self.gates is from nominal gate pose, info['gates_pose'] is the current gate pose
-            if recalc:
+            if recalc and False:
                 print(f"Gate {self._current_gate_idx} at {self.gates[self._current_gate_idx]} is not the same as {info['gates_pose'][self._current_gate_idx]}")    
                 self.gates[self._current_gate_idx, :-1] = info['gates_pose'][self._current_gate_idx]
                 self.X_GOAL, self.waypoints = calc_best_path(self.gates, self.obstacles, self.start_point, t=self.t, plot=False)
