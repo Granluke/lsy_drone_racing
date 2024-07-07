@@ -35,12 +35,12 @@ def plot_gates_and_obstacles(csv_file):
         path_y = ast.literal_eval(df[f'Path_{i*2 + 1}_y'].to_list()[0])
         path_z = ast.literal_eval(df[f'Path_{i*2 + 1}_z'].to_list()[0])
         paths.append((path_x, path_y, path_z))
-        path_labels.append(f'Path_{i*2 + 1}')
+        path_labels.append(f'Path {i}')
 
     # Extract gates
-    for gate_col in gate_columns:
+    for i, gate_col in enumerate(gate_columns):
         gates_list.append(ast.literal_eval(df[gate_col][0]))
-        gate_labels.append(gate_col)
+        gate_labels.append(f'Gates for Path {i}')
 
     print(gates_list)
 

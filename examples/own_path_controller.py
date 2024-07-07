@@ -149,7 +149,9 @@ class Controller(BaseController):
         df[f'Path_{column_index}_y'] = pd.Series([json.dumps(y)])
         df[f'Path_{column_index}_z'] = pd.Series([json.dumps(z)])
         
-        df[f'Gates_{column_index}'] = pd.Series([json.dumps(actual_gates)])
+        print(actual_gates, "Actual Gates")
+        actual_gates_new = [[float(e) for e in ele] for ele in actual_gates]
+        df[f'Gates_{column_index}'] = pd.Series([json.dumps(actual_gates_new)])
 
         # Speichern des aktualisierten DataFrames zurück in die CSV-Datei
         df.to_csv(file_name, index=False)
@@ -239,9 +241,9 @@ class Controller(BaseController):
                     target_rpy_rates = np.zeros(3)
                     command_type = Command.FULLSTATE
                     args = [control_output, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
-                    if self.VERBOSE:
+                    #if self.VERBOSE:
                         # Draw the trajectory on PyBullet's GUI.
-                        draw_trajectory(self.initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
+                        #draw_trajectory(self.initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
 
 
               

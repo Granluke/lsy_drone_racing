@@ -206,12 +206,11 @@ def check_path_collision(path, obstacles, buffer=0.25):
         for p in path.T:
             x, y, z = p
             if (x - x_c) ** 2 + (y - y_c) ** 2 <= radius ** 2 and 0 <= z <= height:
-                print(f"Collision at {x}, {y}, {z}")
+                #print(f"Collision at {x}, {y}, {z}")
                 return True
     return False
 
-def adjust_waypoints(waypoints, obstacles, gates, waypoint_gate_index, buffer=0.35) -> np.ndarray:
-    extra_buffer = 0.2
+def adjust_waypoints(waypoints, obstacles, gates, waypoint_gate_index, buffer=0.27) -> np.ndarray:
     adjusted_waypoints = []
     height = OBSTACLE_DIMENSIONS['height']
     radius = OBSTACLE_DIMENSIONS['radius']
@@ -228,7 +227,7 @@ def adjust_waypoints(waypoints, obstacles, gates, waypoint_gate_index, buffer=0.
                 gate = gates[waypoint_gate_index[i]]
                 _, _, _, _, _, yaw, _ = gate
                 adjusted_waypoint = find_intersection_with_buffer(waypoint, x_c, y_c, yaw, buffer)
-                x, y, z = adjusted_waypoint
+                x, y, z = adjusted_waypoint.round(4)
                 print(f"Adjusted to {x}, {y}, {z}")
         adjusted_waypoints.append([x, y, z])
     return np.array(adjusted_waypoints)
