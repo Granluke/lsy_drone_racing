@@ -74,6 +74,11 @@ def find_closest_traj_point(waypoints:np.ndarray, X_GOAL:np.ndarray) -> int:
     closest_idx = np.argmin(dist, axis=1) # Find the index of the minimum distance
     return closest_idx
 
+def set_buffer_warmup(x_goal:np.ndarray, buffer:int=13) -> np.ndarray:
+    buffer_goal = np.tile(x_goal[buffer], (buffer, 1))
+    x_goal[:buffer] = buffer_goal 
+    return x_goal
+
 def find_closest_gate(X_GOAL:np.ndarray, initial_info:dict, waypoint_idx:np.array) -> dict:
     # gates = initial_info["nominal_gates_pos_and_type"]
     # gates = gates[:,:3][:,None] # create a tensor of shape (N,1,3)

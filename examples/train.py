@@ -63,17 +63,17 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
     logging.basicConfig(level=logging.INFO)
     config_path = Path(__file__).resolve().parents[1] / config # resolve() returns the absolute path, parents[1] /config adds the config
     ## Training parameters
-    PROCESSES_TO_TEST = 2 # Number of vectorized environments to train
+    PROCESSES_TO_TEST = 1 # Number of vectorized environments to train
     NUM_EXPERIMENTS = 1  # RL algorithms can often be unstable, so we run several experiments (see https://arxiv.org/abs/1709.06560)
     TRAIN_STEPS = 2**19  # Number of training steps
     EVAL_EPS = 5 # Number of episodes for evaluation
     ALGO = PPO
-    n_steps = 2**10
+    n_steps = 2**11
     batch_size = n_steps // 2**4
     ## Create Environments
     load_model = False
     if_validate = True
-    random_train = True
+    random_train = False
     train_env = create_race_env(config_path=config_path, gui=gui, random_train=random_train)
     check_env(train_env)
     if PROCESSES_TO_TEST > 1:
@@ -81,9 +81,9 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
         vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui, random_train=random_train)),
                                      n_envs=PROCESSES_TO_TEST, vec_env_cls=SubprocVecEnv)
         train_env = vec_train_env
-    k = 3 # The learning iteration
+    k = 1 # The learning iteration
     save_path = './models'
-    save_name = '/ppo_lvl1_6s_wp_7_iter' + str(k)
+    save_name = '/ppo_lvl1_6s_track2_iter_' + str(k)
     load_path = save_path
     load_name = '/ppo_lvl1_6s_iter' + str(k-1) + '.zip'
     tb_log_name = save_name.split('/')[-1]
@@ -101,7 +101,7 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
         if not load_model:
             print(f'Creating model...')
             model = ALGO("MlpPolicy", train_env, verbose=1, tensorboard_log="./logs", n_steps=n_steps,
-                        learning_rate=0.0003, ent_coef=0.01, device='auto', n_epochs=10, batch_size=batch_size,
+                        learning_rate=0.0003, ent_coef=0.02, device='auto', n_epochs=10, batch_size=batch_size,
                         clip_range=0.2, gae_lambda=0.95)
         else:
             print(f'Loading model from {load_path+load_name}')
@@ -112,7 +112,7 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
             model.clip_range = get_schedule_fn(0.2)
         print(f'Starting experiment...')
         print(f'Log Name: {tb_log_name}')
-        model.learn(total_timesteps=TRAIN_STEPS, progress_bar=True, tb_log_name=tb_log_name, callback=callback_list)
+        model.learn(total_timesteps=TRAIN_STEPS, progress_bar=False, tb_log_name=tb_log_name, callback=callback_list)
         # if if_validate:
         #     mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=EVAL_EPS)
     model.save(save_path+save_name)
