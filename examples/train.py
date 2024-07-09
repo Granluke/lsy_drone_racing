@@ -63,7 +63,7 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
     logging.basicConfig(level=logging.INFO)
     config_path = Path(__file__).resolve().parents[1] / config # resolve() returns the absolute path, parents[1] /config adds the config
     ## Training parameters
-    PROCESSES_TO_TEST = 1 # Number of vectorized environments to train
+    PROCESSES_TO_TEST = 2 # Number of vectorized environments to train
     NUM_EXPERIMENTS = 1  # RL algorithms can often be unstable, so we run several experiments (see https://arxiv.org/abs/1709.06560)
     TRAIN_STEPS = 2**19  # Number of training steps
     EVAL_EPS = 5 # Number of episodes for evaluation
@@ -71,7 +71,7 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
     n_steps = 2**11
     batch_size = n_steps // 2**4
     ## Create Environments
-    load_model = False
+    load_model = True
     if_validate = True
     random_train = False
     train_env = create_race_env(config_path=config_path, gui=gui, random_train=random_train)
@@ -81,11 +81,11 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
         vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui, random_train=random_train)),
                                      n_envs=PROCESSES_TO_TEST, vec_env_cls=SubprocVecEnv)
         train_env = vec_train_env
-    k = 1 # The learning iteration
+    k = 2 # The learning iteration
     save_path = './models'
-    save_name = '/ppo_lvl1_6s_track2_iter_' + str(k)
+    save_name = '/ppo_lvl1_6s_wpnew_iter_' + str(k)
     load_path = save_path
-    load_name = '/ppo_lvl1_6s_iter' + str(k-1) + '.zip'
+    load_name = '/ppo_lvl1_6s_wpnew_iter_' + str(k-1) + '.zip'
     tb_log_name = save_name.split('/')[-1]
     checkpoint_callback = CheckpointCallback(save_freq=2**15, save_path=save_path+save_name,
                                          name_prefix='rl_model')
@@ -112,7 +112,7 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
             model.clip_range = get_schedule_fn(0.2)
         print(f'Starting experiment...')
         print(f'Log Name: {tb_log_name}')
-        model.learn(total_timesteps=TRAIN_STEPS, progress_bar=False, tb_log_name=tb_log_name, callback=callback_list)
+        model.learn(total_timesteps=TRAIN_STEPS, progress_bar=True, tb_log_name=tb_log_name, callback=callback_list)
         # if if_validate:
         #     mean_reward, std_reward = evaluate_policy(model, eval_env, n_eval_episodes=EVAL_EPS)
     model.save(save_path+save_name)
