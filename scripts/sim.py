@@ -14,6 +14,7 @@ import time
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
+import json
 
 import fire
 import numpy as np
@@ -83,7 +84,7 @@ def simulate(
         "gates_passed": 0,
     }
     ep_times = []
-
+    obs_list = []
     # Run the episodes.
     for _ in range(n_runs):
         ep_start = time.time()
@@ -91,6 +92,8 @@ def simulate(
         action = np.zeros(4)
         reward = 0
         obs, info = env.reset()
+        x, y, z = obs[:3]; x,y,z = float(x), float(y), float(z)
+        obs_list.append([x, y, z])
         info["ctrl_timestep"] = CTRL_DT
         info["ctrl_freq"] = CTRL_FREQ
         lap_finished = False
@@ -122,6 +125,8 @@ def simulate(
             # action is not applied in env.step()
             apply_sim_command(env, command_type, args)
             obs, reward, done, info, action = env.step(curr_time, action)
+            x, y, z = obs[:3]; x,y,z = float(x), float(y), float(z)
+            obs_list.append([x, y, z])
             # Update the controller internal state and models.
             ctrl.step_learn(action, obs, reward, done, info)
             # Add up reward, collisions, violations.
@@ -154,6 +159,9 @@ def simulate(
         ctrl.episode_learn()  # Update the controller internal state and models.
         log_episode_stats(stats, info, config, curr_time, lap_finished)
         ctrl.episode_reset()
+        with open('lvl1_6s_wp2.json', 'w') as json_file:
+            my_dict = {"obs": obs_list}
+            json.dump(my_dict, json_file, indent=4)
         # Reset the statistics
         stats["ep_reward"] = 0
         stats["collisions"] = 0

@@ -49,10 +49,6 @@ def create_race_env(config_path: Path, gui: bool = False, random_train=False) ->
     env_factory = partial(make, "quadrotor",**config.quadrotor_config)
     firmware_env = make("firmware", env_factory, FIRMWARE_FREQ, CTRL_FREQ)
     inc_gate_obs = config.quadrotor_config["inc_gate_obs"]
-    # goal state is of shape (N,12), where N is the number of waypoints and 12 is the states of the drone
-    # x,dx,y,dy,z,dz,phi,theta,psi,p,q,r
-    # We need to define something for the missing states since we only have x,y,z
-    # Obey the order of the states
     drone_env = DroneRacingWrapper(firmware_env, terminate_on_lap=True, train_random_state=random_train)
     return ActionWrapper(drone_env)
 
@@ -83,9 +79,9 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
         train_env = vec_train_env
     k = 2 # The learning iteration
     save_path = './models'
-    save_name = '/ppo_lvl1_6s_wpnew_iter_' + str(k)
+    save_name = '/ppo_lvl1_6s_wp_buf4_iter' + str(k)
     load_path = save_path
-    load_name = '/ppo_lvl1_6s_wpnew_iter_' + str(k-1) + '.zip'
+    load_name = '/ppo_lvl1_6s_wp_buf4_iter' + str(k-1) + '.zip'
     tb_log_name = save_name.split('/')[-1]
     checkpoint_callback = CheckpointCallback(save_freq=2**15, save_path=save_path+save_name,
                                          name_prefix='rl_model')

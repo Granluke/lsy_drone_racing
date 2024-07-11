@@ -88,7 +88,8 @@ class Controller(BaseController):
         #########################
         self.iter_counter = 0
         assert X_GOAL is not None and waypoints is not None, "X_GOAL and waypoints must be provided"
-        self.agent = PPO.load("./models/ppo_lvl1_6s_wpnew_iter_1.zip")
+        # self.agent = PPO.load("./models/ppo_lvl1_6s_wp_buf4_iter1/rl_model_393216_steps.zip")
+        self.agent = PPO.load("./models/ppo_lvl1_6s_wp_buf4_iter1.zip")
         self.las = self.agent.action_space.high[0]
         self.fas = 1 - self.las
         print(f'LAS: {self.las}')
@@ -162,11 +163,11 @@ class Controller(BaseController):
                 action = self.action_scale * action
                 # Adding the first point in the horizon
                 pos = self.action_scale * obs[12:15]
-                if self.RL and False:
+                if self.RL:
                     pos = (self.las*obs[:3] + action[:3]) + self.fas*pos
                 else:
-                    # pos = self.action_scale*self.X_GOAL[step]
-                    pos = pos
+                    pos = self.action_scale*self.X_GOAL[step]
+                    # pos = pos
                 # yaw = np.arctan2(-(pos[1]-obs[1]), (pos[0]-obs[0]))
                 yaw = 0.0
                 args = [pos, np.zeros(3), np.zeros(3), yaw, np.zeros(3), ep_time]

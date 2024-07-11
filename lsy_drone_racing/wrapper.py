@@ -322,7 +322,7 @@ class DroneRacingWrapper(Wrapper):
             ## Increase the counter for the chunk switch
             self.ctr_chunk_switch += 1
             # if self._wrap_ctr_step == self.idx_wp2traj and False: # If we arrive the waypoint index
-            if self.chunk_distance < 0.1:
+            if self.chunk_distance < 0.15:
                 reward += 1 # REWARD for the switch
                 self.idx_chunk_goal += 1 if self.idx_chunk_goal < self.waypoints.shape[0]-1 else 0
                 self.chunk_goal = self.waypoints[self.idx_chunk_goal,:]
@@ -348,7 +348,7 @@ class DroneRacingWrapper(Wrapper):
         if self.ctr_chunk_switch > self.max_iter_chunk_switch:
             print('Chunk Switch Counter Exceeded!')
             terminated = True
-            reward -= 5
+            reward -= 10
         self._reset_required = terminated or truncated
         # Check if the gate passed
         if info["current_gate_id"] != self._current_gate_idx:
@@ -501,7 +501,7 @@ class DroneRacingWrapper(Wrapper):
         ## Constraint Violation Penality
         cstr_penalty = -10 if self.env.env.cnstr_violation else 0
         ## Gate Passing Reward
-        # gate_rew = 2.5 if self.env.env.stepped_through_gate else 0
+        # It is outside of the reward function
         ## Waypoint Passing Reward
         # It is outside of the reward function
         task_rew = 10 if info["task_completed"] else 0
@@ -632,6 +632,7 @@ class DroneRacingObservationWrapper:
                 self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
                 print(f'Chunk Idx: {self.idx_chunk_goal}')
         #endregion
+        
         #region Recalculate Trajectory
         if self._current_gate_idx != -1:
             recalc = False if (info['gates_pose'][self._current_gate_idx,:2] == self.gates[self._current_gate_idx, :2]).all() else True
