@@ -159,7 +159,7 @@ def simulate(
         ctrl.episode_learn()  # Update the controller internal state and models.
         log_episode_stats(stats, info, config, curr_time, lap_finished)
         ctrl.episode_reset()
-        with open('lvl1_6s_wp2.json', 'w') as json_file:
+        with open('lvl1_6s_wp4.json', 'w') as json_file:
             my_dict = {"obs": obs_list}
             json.dump(my_dict, json_file, indent=4)
         # Reset the statistics

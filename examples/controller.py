@@ -89,7 +89,7 @@ class Controller(BaseController):
         self.iter_counter = 0
         assert X_GOAL is not None and waypoints is not None, "X_GOAL and waypoints must be provided"
         # self.agent = PPO.load("./models/ppo_lvl1_6s_wp_buf4_iter1/rl_model_393216_steps.zip")
-        self.agent = PPO.load("./models/ppo_lvl1_6s_wp_buf4_iter1.zip")
+        self.agent = PPO.load("./models/ppo_lvl1_6s_wpnew_iter_2.zip")
         self.las = self.agent.action_space.high[0]
         self.fas = 1 - self.las
         print(f'LAS: {self.las}')

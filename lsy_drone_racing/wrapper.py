@@ -572,7 +572,7 @@ class DroneRacingObservationWrapper:
         self.start_point = [obs[0], obs[2], TAKEOFF_HEIGHT]
         freq = self.env.ctrl_freq
         self.t = np.linspace(0, 1, int(DURATION * freq))
-        self.X_GOAL, self.waypoints = calc_best_path(gates=self.gates, obstacles=self.obstacles, start_point=self.start_point, t=self.t, plot=False)
+        self.X_GOAL, self.waypoints = calc_best_path(gates=self.gates, obstacles=self.obstacles, start_point=self.start_point, t=self.t, plot=True)
         self.wp_traj_idx = find_closest_traj_point(self.waypoints, self.X_GOAL)
         #endregion
         #region Observation Transform
