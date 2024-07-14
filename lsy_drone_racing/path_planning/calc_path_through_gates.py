@@ -57,7 +57,7 @@ def create_waypoints(gates, start_point):
     go_around_points = []
     intersection_points = []
     waypoint_gate_index = [0]
-    avoidance_distance = 0.2
+    avoidance_distance = 0.35
 
     for i, gate in enumerate(gates):
         generate_gate_waypoints(gates, waypoints, buffer, before_after_points, go_around_points, intersection_points, avoidance_distance, i, gate, waypoint_gate_index)
@@ -118,13 +118,13 @@ def generate_gate_waypoints(gates, waypoints, buffer, before_after_points, go_ar
         
         # Check if the line to the next gate goes through the current gate
     if i < len(gates) - 1:
-        check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, intersection_points, avoidance_distance, i, gate, z_center, height, after_wp, waypoint_gate_index)
+        check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, intersection_points, avoidance_distance, i, gate, z_center, height, after_wp, waypoint_gate_index, factor_for_2nd_before_point)
     else:
         go_around_points.append(([]))
 
    
 
-def check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, intersection_points, avoidance_distance, i, gate, z_center, height, after_wp, waypoint_gate_index):
+def check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, intersection_points, avoidance_distance, i, gate, z_center, height, after_wp, waypoint_gate_index, factor_for_2nd_before_point):
     next_gate = gates[i + 1]
     x, y, _, _, _, yaw, gate_type = gate
     next_x, next_y, _, _, _, _, next_gate_type = next_gate
@@ -154,9 +154,24 @@ def check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, i
         # Calculate the avoidance point
         avoidance_wp = plane_point + intersection_vector * (0.45/sqrt(2) + avoidance_distance)
 
-        waypoints.append(avoidance_wp)
+        
+
+        # make another avoidance waypoint parallel to the gate with the buffer and z = avaoidance_wp[2]
+        factor_for_2nd_avoidancy_point = -1/factor_for_2nd_before_point * factor_for_2nd_before_point
+        waypoints[-1] = [x + factor_for_2nd_avoidancy_point * (buffer + 0.1) * np.sin(yaw), 
+                              y - factor_for_2nd_avoidancy_point * (buffer + 0.1) * np.cos(yaw),
+                                z_center - 0.05]
+        avoidance_wp2 = [x + factor_for_2nd_avoidancy_point * (buffer + 0.1) * np.sin(yaw), 
+                              y - factor_for_2nd_avoidancy_point * (buffer + 0.1) * np.cos(yaw), 
+                              z_center + 0.3]  
+        test_avoidance_wp = [x, y, z_center + 0.45]
+
+        waypoints.append(avoidance_wp2)
+        #waypoints.append(avoidance_wp)
+        waypoints.append(test_avoidance_wp)
         waypoint_gate_index.append(i)
-        go_around_points.append((avoidance_wp))
+        waypoint_gate_index.append(i)
+        go_around_points.append((avoidance_wp2, test_avoidance_wp))
     else:
         go_around_points.append(([]))
 

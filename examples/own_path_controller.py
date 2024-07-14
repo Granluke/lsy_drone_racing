@@ -41,7 +41,7 @@ import json
 # added by me for not using reference to dict
 import copy
 
-TARGET_DURATION = 6.5 # seconds
+TARGET_DURATION = 5.1 # seconds
 START_TO_HEIGHT = 0.1 # meters
 
 class Controller(BaseController):
@@ -114,7 +114,7 @@ class Controller(BaseController):
         if self.VERBOSE:
             # Draw the trajectory on PyBullet's GUI.
             draw_trajectory(initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
-
+        self.step_offset = 0
         self._take_off = False
         self._setpoint_land = False
         self._land = False
@@ -190,11 +190,18 @@ class Controller(BaseController):
 
         if not self._take_off:
             command_type = Command.TAKEOFF
-            args = [START_TO_HEIGHT, 0.8]  # Height, duration
+            args = [START_TO_HEIGHT, 0.2]  # Height, duration
             self._take_off = True  # Only send takeoff command once
         else:
-            step = iteration - 1 * self.CTRL_FREQ  # Account for 1s delay due to takeoff
-            if ep_time - 1 > 0 and step < len(self.ref_x):
+            step = iteration - self.CTRL_FREQ  # Account for 1s delay due to takeoff
+            if step < 0:
+                if self.step_offset == 0:
+                    self.step_offset = step
+                #self.step_offset += 1
+            
+            step -= self.step_offset # step offset is negative
+            print(step, "Step,", self.step_offset)
+            if ep_time - 0.2 > 0 and step < len(self.ref_x):
 
                 current_target_gate_id = copy.deepcopy(info["current_target_gate_id"])
                 current_target_gate_pos = copy.deepcopy(info["current_target_gate_pos"])
