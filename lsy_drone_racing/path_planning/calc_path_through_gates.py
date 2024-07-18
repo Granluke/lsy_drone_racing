@@ -332,13 +332,13 @@ def calc_best_path(gates, obstacles, start_point, t, plot=True):
         path = path3
 
     if plot:
-        import json
-        with open('lvl1_6s_wp4.json','r') as json_file:
-            loaded_dict = json.load(json_file)
-            traj = list(np.array(loaded_dict['obs']).T)
-            import pdb; pdb.set_trace()
-            plot_gates_and_obstacles(gates, obstacles, path, traj, waypoints, before_after_points, go_around_points, intersection_points)
-            pdb.set_trace()
+        # import json
+        # with open('lvl1_6s_wp4.json','r') as json_file:
+        #     loaded_dict = json.load(json_file)
+        #     traj = list(np.array(loaded_dict['obs']).T)
+        #     import pdb; pdb.set_trace()
+        #     plot_gates_and_obstacles(gates, obstacles, path, traj, waypoints, before_after_points, go_around_points, intersection_points)
+        #     pdb.set_trace()
         plot_gates_and_obstacles(gates, obstacles, path1, path, waypoints, before_after_points, go_around_points, intersection_points)
 
     x_goal = np.zeros((len(path[0]), 3))

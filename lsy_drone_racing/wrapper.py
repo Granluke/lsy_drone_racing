@@ -674,8 +674,8 @@ class ActionWrapper(ActionWrapper):
         # goal_yaw = np.arctan2(-(goal_pose[1]-current_pose[1]), (goal_pose[0]-current_pose[0]))
         # yaw = (goal_yaw - current_yaw)/np.pi
         yaw = 0.0
-        action[:3] = action[:3] + self.fas * action_fix
-        # action = action_fix
+        # action[:3] = action[:3] + self.fas * action_fix
+        action = action_fix
         action = np.concatenate((action,[yaw]))
         check_mask1 = action > 1
         check_mask2 = action < -1

@@ -163,7 +163,7 @@ class Controller(BaseController):
                 action = self.action_scale * action
                 # Adding the first point in the horizon
                 pos = self.action_scale * obs[12:15]
-                if self.RL:
+                if self.RL and False:
                     pos = (self.las*obs[:3] + action[:3]) + self.fas*pos
                 else:
                     pos = self.action_scale*self.X_GOAL[step]
