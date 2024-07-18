@@ -19,19 +19,16 @@ def run_simulation():
 
 # Function to parse the output
 def parse_output(output):
-    reason_match = re.findall(r"Reason for termination: (.+)", output)
     time_match = re.findall(r"\d+\.\d+", output)
-    print(reason_match)
-    if reason_match and time_match:
-        reason = reason_match.group(1)
+    if time_match:
         time = float(time_match[-1])
-        return reason, time
-    return None, None
+        return time
+    return None
 
 # Run the simulation multiple times
 for _ in range(num_runs):
     output = run_simulation()
-    reason, time = parse_output(output)
+    time = parse_output(output)
     reason = "TASK COMPLETION"
     if reason and time:
         termination_reasons.append(reason)
