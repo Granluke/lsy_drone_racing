@@ -207,8 +207,6 @@ class DroneRacingWrapper(Wrapper):
         self.wp_traj_idx = find_closest_traj_point(self.waypoints, self.X_GOAL)
         ## Find the gate corresponding to the waypoints
         self.wp_gate_dict = find_closest_gate(self.X_GOAL, info, self.wp_traj_idx)
-        ## Calculate the distance between each step
-        self.X_GOAL_distance = np.mean(np.linalg.norm(self.X_GOAL[1:,:] - self.X_GOAL[:-1,:], axis=1))
         if self.train_random_state: # Spawn the drone on randomly chosen waypoint
             # start_ind = np.random.randint(1, self.waypoints.shape[0]-2)
             start_ind = 7
@@ -322,7 +320,7 @@ class DroneRacingWrapper(Wrapper):
             ## Increase the counter for the chunk switch
             self.ctr_chunk_switch += 1
             # if self._wrap_ctr_step == self.idx_wp2traj and False: # If we arrive the waypoint index
-            if self.chunk_distance < 0.15:
+            if self.chunk_distance < 0.2:
                 reward += 1 # REWARD for the switch
                 self.idx_chunk_goal += 1 if self.idx_chunk_goal < self.waypoints.shape[0]-1 else 0
                 self.chunk_goal = self.waypoints[self.idx_chunk_goal,:]
@@ -357,12 +355,14 @@ class DroneRacingWrapper(Wrapper):
         ## Recalculating the trajectory if the gate position is changed
         #region Recalculate Trajectory
         if self._current_gate_idx != -1:
-            recalc = False if (info['gates_pose'][self._current_gate_idx,:2] == self.gates[self._current_gate_idx, :2]).all() else True
+            recalc = False if np.linalg.norm(np.array(info['gates_pose'][self._current_gate_idx,:2])-np.array(self.gates[self._current_gate_idx, :2])) < 0.01 else True
             # self.gates is from nominal gate pose, info['gates_pose'] is the current gate pose
-            if recalc and False:
+            if recalc:
                 print(f"Gate {self._current_gate_idx} at {self.gates[self._current_gate_idx]} is not the same as {info['gates_pose'][self._current_gate_idx]}")    
                 self.gates[self._current_gate_idx, :-1] = info['gates_pose'][self._current_gate_idx]
-                self.X_GOAL, self.waypoints = calc_best_path(self.gates, self.obstacles, self.start_point, t=self.t, plot=False)
+                with open(os.devnull, 'w') as fnull:
+                    with redirect_stdout(fnull):
+                        self.X_GOAL, self.waypoints = calc_best_path(self.gates, self.obstacles, self.start_point, t=self.t, plot=False)
                 assert max(self.X_GOAL[:,2]) < 2.5, "Drone must stay below the ceiling"
                 self.wp_traj_idx = find_closest_traj_point(self.waypoints, self.X_GOAL)
         #endregion
@@ -497,7 +497,7 @@ class DroneRacingWrapper(Wrapper):
         # body_rate_penalty = -0.01*np.linalg.norm(body_rate, axis=0)
         body_rate_penalty = 0
         ## Crash Penality
-        crash_penality = -10 if self.env.env.currently_collided else 0
+        crash_penality = -3 if self.env.env.currently_collided else 0
         ## Constraint Violation Penality
         cstr_penalty = -10 if self.env.env.cnstr_violation else 0
         ## Gate Passing Reward
@@ -572,8 +572,9 @@ class DroneRacingObservationWrapper:
         self.start_point = [obs[0], obs[2], TAKEOFF_HEIGHT]
         freq = self.env.ctrl_freq
         self.t = np.linspace(0, 1, int(DURATION * freq))
-        self.X_GOAL, self.waypoints = calc_best_path(gates=self.gates, obstacles=self.obstacles, start_point=self.start_point, t=self.t, plot=True)
+        self.X_GOAL, self.waypoints = calc_best_path(gates=self.gates, obstacles=self.obstacles, start_point=self.start_point, t=self.t, plot=False)
         self.wp_traj_idx = find_closest_traj_point(self.waypoints, self.X_GOAL)
+        self.xgoal_debug = deepcopy(self.X_GOAL)
         #endregion
         #region Observation Transform
         assert self.obs_goal_horizon > 0, "The horizon must be greater than 0"
@@ -632,17 +633,20 @@ class DroneRacingObservationWrapper:
                 self.chunk_distance = np.linalg.norm(obs[:3] - self.chunk_goal[:3], axis=0)
                 print(f'Chunk Idx: {self.idx_chunk_goal}')
         #endregion
-        
+        # import pdb; pdb.set_trace() if self._wrap_ctr_step > 60 else None
         #region Recalculate Trajectory
         if self._current_gate_idx != -1:
-            recalc = False if (info['gates_pose'][self._current_gate_idx,:2] == self.gates[self._current_gate_idx, :2]).all() else True
-            if False:
+            recalc = False if np.linalg.norm(np.array(info['gates_pose'][self._current_gate_idx,:2])-np.array(self.gates[self._current_gate_idx, :2])) < 0.01 else True
+            if recalc:
                 print(f"Gate {self._current_gate_idx} at {self.gates[self._current_gate_idx]} is not the same as {info['gates_pose'][self._current_gate_idx]}")    
                 self.gates[self._current_gate_idx, :-1] = info['gates_pose'][self._current_gate_idx]
-                self.X_GOAL, self.waypoints = calc_best_path(self.gates, self.obstacles, self.start_point, t=self.t, plot=False)
+                with open(os.devnull, 'w') as fnull:
+                    with redirect_stdout(fnull):
+                        self.X_GOAL, self.waypoints = calc_best_path(self.gates, self.obstacles, self.start_point, t=self.t, plot=False)
                 # convert path resulted from splev to x,y,z points
                 assert max(self.X_GOAL[:,2]) < 2.5, "Drone must stay below the ceiling"
                 self.wp_traj_idx = find_closest_traj_point(self.waypoints, self.X_GOAL)
+                recalc = False
         #endregion
         return obs, reward, done, info, action
 #region Action Wrapper
@@ -671,11 +675,9 @@ class ActionWrapper(ActionWrapper):
         current_yaw = obs[5]
         goal_pose = obs[12:15]
         action_fix = goal_pose - current_pose
-        # goal_yaw = np.arctan2(-(goal_pose[1]-current_pose[1]), (goal_pose[0]-current_pose[0]))
-        # yaw = (goal_yaw - current_yaw)/np.pi
         yaw = 0.0
-        # action[:3] = action[:3] + self.fas * action_fix
-        action = action_fix
+        action[:3] = action[:3] + self.fas * action_fix
+        # action = action_fix
         action = np.concatenate((action,[yaw]))
         check_mask1 = action > 1
         check_mask2 = action < -1
