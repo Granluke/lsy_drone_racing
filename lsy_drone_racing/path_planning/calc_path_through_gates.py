@@ -65,7 +65,7 @@ def create_waypoints(gates, start_point):
     return np.array(waypoints), before_after_points, go_around_points, intersection_points, waypoint_gate_index
 
 def generate_gate_waypoints(gates, waypoints, buffer, before_after_points, go_around_points, intersection_points, avoidance_distance, i, gate, waypoint_gate_index):
-    x, y, z_center, roll, pitch, yaw, gate_type = gate
+    x, y, _, roll, pitch, yaw, gate_type = gate
     if gate_type == 0:
         height = 1.0
     else:
@@ -118,7 +118,7 @@ def generate_gate_waypoints(gates, waypoints, buffer, before_after_points, go_ar
         
         # Check if the line to the next gate goes through the current gate
     if i < len(gates) - 1:
-        check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, intersection_points, avoidance_distance, i, gate, z_center, height, after_wp, waypoint_gate_index, factor_for_2nd_before_point)
+        check_and_avoid_gate_intersect(gates, waypoints, buffer, go_around_points, intersection_points, avoidance_distance, i, gate, z, height, after_wp, waypoint_gate_index, factor_for_2nd_before_point)
     else:
         go_around_points.append(([]))
 
