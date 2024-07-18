@@ -41,7 +41,7 @@ import json
 # added by me for not using reference to dict
 import copy
 
-TARGET_DURATION = 5.1 # seconds
+TARGET_DURATION = 6.5 # seconds # 5.1 is best for Level 1
 START_TO_HEIGHT = 0.1 # meters
 
 class Controller(BaseController):
