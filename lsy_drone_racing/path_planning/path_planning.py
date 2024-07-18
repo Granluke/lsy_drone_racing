@@ -205,10 +205,6 @@ class PathPlanning:
         
         local_point = np.dot(yaw_matrix, rel_point)
 
-        print(local_point, gate_width, gate_center, gate_height)
-        print(-gate_width / 2 <= local_point[0] <= gate_width / 2)
-        print((gate_center[2] - gate_height / 2) <= point[2] <= (gate_center[2] + gate_height / 2))
-
         return (-gate_width / 2 <= local_point[0] <= gate_width / 2 and
                 (gate_center[2] - gate_height / 2) <= point[2] <= (gate_center[2] + gate_height / 2))
 

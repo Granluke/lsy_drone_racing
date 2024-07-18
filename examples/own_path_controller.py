@@ -33,7 +33,7 @@ from scipy import interpolate
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
 from lsy_drone_racing.utils import draw_trajectory
-from lsy_drone_racing.path_planning import calc_best_path, PIDController
+from lsy_drone_racing.path_planning import PIDController, PathPlanning
 import csv
 import pandas as pd
 import os
@@ -75,7 +75,7 @@ class Controller(BaseController):
         self.CTRL_FREQ = initial_info["ctrl_freq"]
         self.initial_obs = initial_obs
         self.initial_info = initial_info
-        self.VERBOSE = verbose
+        self.VERBOSE = False
         self.BUFFER_SIZE = buffer_size
 
         # Store a priori scenario information.
@@ -103,7 +103,9 @@ class Controller(BaseController):
         gates = self.NOMINAL_GATES
         t = np.linspace(0, 1, int(TARGET_DURATION * self.CTRL_FREQ))
 
-        path, waypoints = calc_best_path(gates, self.NOMINAL_OBSTACLES, start_point, t=t, plot=False)
+        path_planning = PathPlanning(gates, self.NOMINAL_OBSTACLES, start_point, t=t, plot=False)
+
+        path, waypoints = path_planning.calc_best_path()
         self.waypoints = waypoints
 
         self.append_new_path_and_gates_to_csv(path, self.ACTUAL_GATES, 'paths_gates.csv', obstacles=self.NOMINAL_OBSTACLES, waypoints=waypoints)
@@ -228,8 +230,9 @@ class Controller(BaseController):
                     
                     self.ACTUAL_GATES[current_target_gate_id] = current_target_gate_pos
                     t = np.linspace(0, 1, int(TARGET_DURATION * self.CTRL_FREQ))
+                    path_planning = PathPlanning(self.ACTUAL_GATES, self.NOMINAL_OBSTACLES, start_point, t=t, plot=False)
 
-                    path, waypoints = calc_best_path(self.ACTUAL_GATES, self.NOMINAL_OBSTACLES, start_point, t=t, plot=False)
+                    path, waypoints = path_planning.calc_best_path()
                     self.append_new_path_and_gates_to_csv(path, self.ACTUAL_GATES, 'paths_gates.csv', obstacles=None, waypoints=waypoints)
                     self.waypoints = waypoints
                     # convert path resulted from splev to x,y,z points
