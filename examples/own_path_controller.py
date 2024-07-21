@@ -202,7 +202,6 @@ class Controller(BaseController):
                 #self.step_offset += 1
             
             step -= self.step_offset # step offset is negative
-            print(step, "Step,", self.step_offset)
             if ep_time - 0.2 > 0 and step < len(self.ref_x):
 
                 current_target_gate_id = copy.deepcopy(info["current_target_gate_id"])

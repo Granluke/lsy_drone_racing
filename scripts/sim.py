@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 def simulate(
     config: str = "config/getting_started.yaml",
     controller: str = "examples/own_path_controller.py",
-    n_runs: int = 1,
+    n_runs: int = 10,
     gui: bool = True,
     terminate_on_lap: bool = True,
 ) -> list[float]:
