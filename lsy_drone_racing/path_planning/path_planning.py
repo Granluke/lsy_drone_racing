@@ -254,13 +254,13 @@ class PathPlanning:
                 x_c, y_c, z_c, _, _, _ = cylinder
                 if (x - x_c) ** 2 + (y - y_c) ** 2 <= radius ** 2 and 0 <= z <= height:
                     collision = True
-                    print(f"Collision at {x}, {y}, {z} for waypoint {waypoint} at gate {self.waypoint_gate_indices[i]} with index {i}")
+                    #print(f"Collision at {x}, {y}, {z} for waypoint {waypoint} at gate {self.waypoint_gate_indices[i]} with index {i}")
                     # Adjust the waypoint by moving it away from the cylinder so that buffer is incorporated but parallel to the gate
                     gate = self.gates[self.waypoint_gate_indices[i]]
                     _, _, _, _, _, yaw, _ = gate
                     adjusted_waypoint = self.find_intersection_with_buffer(waypoint, x_c, y_c, yaw)
                     x, y, z = adjusted_waypoint.round(4)
-                    print(f"Adjusted to {x}, {y}, {z}")
+                    #print(f"Adjusted to {x}, {y}, {z}")
             adjusted_waypoints.append([x, y, z])
         return np.array(adjusted_waypoints)
 
