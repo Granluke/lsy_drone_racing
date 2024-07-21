@@ -10,7 +10,7 @@ from math import sqrt
 OBSTACLE_DIMENSIONS = {'shape': 'cylinder', 'height': 1.05, 'radius': 0.05}
 
 
-def create_gate(self, x, y, yaw, gate_type):
+def create_gate(x, y, yaw, gate_type):
     if gate_type == 0:
         height = 1.0
     else:
@@ -44,7 +44,7 @@ def create_gate(self, x, y, yaw, gate_type):
     return points
 
 
-def create_cylinder(self, x, y, z, height, radius):
+def create_cylinder(x, y, z, height, radius):
     z_values = np.linspace(0, height, 30)
     theta = np.linspace(0, 2 * np.pi, 30)
     theta_grid, z_grid = np.meshgrid(theta, z_values)

@@ -41,7 +41,7 @@ import json
 # added by me for not using reference to dict
 import copy
 
-TARGET_DURATION = 6.5 # seconds # 5.1 is best for Level 1
+TARGET_DURATION = 6 # seconds # 5.1 is best for Level 1, 6.5 for Level 2 and 3
 START_TO_HEIGHT = 0.1 # meters
 
 class Controller(BaseController):
@@ -152,7 +152,6 @@ class Controller(BaseController):
         df[f'Path_{column_index}_y'] = pd.Series([json.dumps(y)])
         df[f'Path_{column_index}_z'] = pd.Series([json.dumps(z)])
         
-        print(actual_gates, "Actual Gates")
         actual_gates_new = [[float(e) for e in ele] for ele in actual_gates]
         df[f'Gates_{column_index}'] = pd.Series([json.dumps(actual_gates_new)])
 
@@ -211,6 +210,7 @@ class Controller(BaseController):
                 #append type to the current_target_gate_pos
                 current_target_gate_pos.append(current_target_gate_type)
                 nominal_gate_pos = self.NOMINAL_GATES[current_target_gate_id]
+                current_target_gate_pos[2] = 0
 
                 if current_target_gate_pos == nominal_gate_pos:
                     target_pos = np.array([self.ref_x[step], self.ref_y[step], self.ref_z[step]])

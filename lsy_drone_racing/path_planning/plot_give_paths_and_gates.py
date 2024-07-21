@@ -54,8 +54,8 @@ def plot_gates_and_obstacles(csv_file):
 
     for gate_set, color, label in zip(gates_list, gate_colors, gate_labels):
         for i, gate in enumerate(gate_set):
-            x, y, z_center, roll, pitch, yaw, gate_type = gate
-            points = create_gate(x, y, yaw, gate_type)
+            x, y, z_center, _, _, yaw, gate_type = gate
+            points = create_gate(x=x, y=y, yaw=yaw, gate_type=gate_type)
             all_points.append(points)
             verts = [list(zip(points[:, 0], points[:, 1], points[:, 2]))]
             poly = Poly3DCollection(verts, alpha=0.5, linewidths=1, edgecolors=color)

@@ -28,7 +28,7 @@ class PathPlanning:
         self.waypoint_obstacle_buffer=0.27
         self.path_collision_buffer = 0.25
         self.adjust_path_buffer = 0.45
-        self.gate_frame_buffer = 0.2
+        self.gate_frame_buffer = 0.1
         self.edge_length = 0.45
 
     def create_gate(self, x, y, yaw, gate_type):
@@ -157,7 +157,6 @@ class PathPlanning:
         if intersects:
             self.intersection_points.append(intersection_point)
         
-        print("Checking for intersection from ", i, "with gate", i + 1, ":", intersects, "with gate center:", z_center)
         if intersects and self.point_in_gate(intersection_point, np.array([x, y, z_center]), yaw):
             print(f"Gate {i} intersects with line to gate {i + 1} at {intersection_point} for next gate {next_x, next_y, next_z_center}")
                 # Calculate direction to next gate
@@ -334,7 +333,6 @@ class PathPlanning:
         return np.array(adjusted_path)
 
     def calc_best_path(self):
-        print("Starting point", self.start_point)
         
         self.create_waypoints()
         self.waypoints = self.adjust_waypoints()
