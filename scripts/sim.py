@@ -162,7 +162,7 @@ def simulate(
 
     # Close the environment
     env.close()
-    return ep_times, max_speeds
+    return ep_times
 
 
 def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float, lap_finished: bool):
