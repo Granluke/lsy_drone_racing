@@ -10,6 +10,7 @@ from math import sqrt
 OBSTACLE_DIMENSIONS = {'shape': 'cylinder', 'height': 1.05, 'radius': 0.05}
 
 
+
 class PathPlanning:
 
     def __init__(self, gates, obstacles, start_point, t, plot=True) -> None:
