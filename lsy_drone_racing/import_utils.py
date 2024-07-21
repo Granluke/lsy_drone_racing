@@ -50,4 +50,5 @@ except ImportError:
     pycrazyswarm_path = path / "scripts"
     if str(pycrazyswarm_path) not in sys.path:
         sys.path.insert(0, str(pycrazyswarm_path))
+        sys.path.insert(0, str( path / "path_planning"))
     import pycrazyswarm  # noqa: F401
