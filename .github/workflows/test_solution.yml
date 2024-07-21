@@ -3,8 +3,7 @@ name: Online Competition
 on:
   push:
     branches:
-      - master
-      - main
+      - base_path_planning
 
 
 jobs:
