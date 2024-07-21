@@ -33,7 +33,7 @@ from scipy import interpolate
 from lsy_drone_racing.command import Command
 from lsy_drone_racing.controller import BaseController
 from lsy_drone_racing.utils import draw_trajectory
-from lsy_drone_racing import PIDController, PathPlanning
+from lsy_drone_racing.path_planning import PIDController, PathPlanning
 import csv
 import pandas as pd
 import os
