@@ -79,11 +79,10 @@ class Controller(BaseController):
         self.BUFFER_SIZE = buffer_size
 
         # Store a priori scenario information.
-        self.NOMINAL_GATES = initial_info["nominal_gates_pos_and_type"]
-        self.ACTUAL_GATES = initial_info["nominal_gates_pos_and_type"]
-        self.NOMINAL_OBSTACLES = initial_info["nominal_obstacles_pos"]
+        self.NOMINAL_GATES = copy.deepcopy(initial_info["nominal_gates_pos_and_type"])
+        self.ACTUAL_GATES = copy.deepcopy(initial_info["nominal_gates_pos_and_type"])
+        self.NOMINAL_OBSTACLES = copy.deepcopy(initial_info["nominal_obstacles_pos"])
 
-        print(self.NOMINAL_GATES, "Nominal Gates")
 
         # Reset counters and buffers.
         self.reset()
@@ -110,7 +109,7 @@ class Controller(BaseController):
         path, waypoints = path_planning.calc_best_path()
         self.waypoints = waypoints
 
-        self.append_new_path_and_gates_to_csv(path, self.ACTUAL_GATES, 'paths_gates.csv', obstacles=self.NOMINAL_OBSTACLES, waypoints=waypoints)
+        self.append_new_path_and_gates_to_csv(path, gates, 'paths_gates.csv', obstacles=self.NOMINAL_OBSTACLES, waypoints=waypoints)
         # convert path resulted from splev to x,y,z points
         self.ref_x, self.ref_y, self.ref_z = path
         assert max(self.ref_z) < 2.5, "Drone must stay below the ceiling"
