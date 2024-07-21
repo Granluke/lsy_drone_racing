@@ -83,6 +83,8 @@ class Controller(BaseController):
         self.ACTUAL_GATES = initial_info["nominal_gates_pos_and_type"]
         self.NOMINAL_OBSTACLES = initial_info["nominal_obstacles_pos"]
 
+        print(self.NOMINAL_GATES, "Nominal Gates")
+
         # Reset counters and buffers.
         self.reset()
         self.episode_reset()
