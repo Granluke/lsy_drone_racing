@@ -59,15 +59,15 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
     logging.basicConfig(level=logging.INFO)
     config_path = Path(__file__).resolve().parents[1] / config # resolve() returns the absolute path, parents[1] /config adds the config
     ## Training parameters
-    PROCESSES_TO_TEST = 2 # Number of vectorized environments to train
+    PROCESSES_TO_TEST = 4 # Number of vectorized environments to train
     NUM_EXPERIMENTS = 1  # RL algorithms can often be unstable, so we run several experiments (see https://arxiv.org/abs/1709.06560)
-    TRAIN_STEPS = 2**19  # Number of training steps
+    TRAIN_STEPS = 2**18  # Number of training steps
     EVAL_EPS = 5 # Number of episodes for evaluation
     ALGO = PPO
     n_steps = 2**11
     batch_size = n_steps // 2**4
     ## Create Environments
-    load_model = False
+    load_model = True
     if_validate = True
     random_train = False
     train_env = create_race_env(config_path=config_path, gui=gui, random_train=random_train)
@@ -77,11 +77,11 @@ def main(config: str = "config/level1_train.yaml", gui: bool = False):
         vec_train_env = make_vec_env(lambda: MultiProcessingWrapper(create_race_env(config_path=config_path, gui=gui, random_train=random_train)),
                                      n_envs=PROCESSES_TO_TEST, vec_env_cls=SubprocVecEnv)
         train_env = vec_train_env
-    k = 1 # The learning iteration
+    k = 4 # The learning iteration
     save_path = './models'
-    save_name = '/ppo_lvl1_5s_iter' + str(k)
+    save_name = '/ppo_lvl1_5sgate_iter' + str(k)
     load_path = save_path
-    load_name = '/ppo_lvl2_6s_wp_iter' + str(k-1) + '.zip'
+    load_name = '/ppo_lvl1_5sgate_iter' + str(k-1) + '.zip'
     tb_log_name = save_name.split('/')[-1]
     checkpoint_callback = CheckpointCallback(save_freq=2**15, save_path=save_path+save_name,
                                          name_prefix='rl_model')

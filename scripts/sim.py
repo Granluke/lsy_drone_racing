@@ -94,6 +94,7 @@ def simulate(
         obs, info = env.reset()
         x, y, z = obs[:3]; x,y,z = float(x), float(y), float(z)
         obs_list.append([x, y, z])
+        max_velo = 0
         info["ctrl_timestep"] = CTRL_DT
         info["ctrl_freq"] = CTRL_FREQ
         lap_finished = False
@@ -127,6 +128,8 @@ def simulate(
             obs, reward, done, info, action = env.step(curr_time, action)
             x, y, z = obs[:3]; x,y,z = float(x), float(y), float(z)
             obs_list.append([x, y, z])
+            velo = np.linalg.norm(obs[9:12])
+            max_velo = velo if velo > max_velo else max_velo
             # Update the controller internal state and models.
             ctrl.step_learn(action, obs, reward, done, info)
             # Add up reward, collisions, violations.
@@ -159,6 +162,7 @@ def simulate(
         ctrl.episode_learn()  # Update the controller internal state and models.
         log_episode_stats(stats, info, config, curr_time, lap_finished)
         ctrl.episode_reset()
+        print(f"Max velocity: {max_velo}")
         with open('lvl1_6s_wp4.json', 'w') as json_file:
             my_dict = {"obs": obs_list}
             json.dump(my_dict, json_file, indent=4)
