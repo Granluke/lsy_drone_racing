@@ -27,7 +27,6 @@ Tips:
 
 from __future__ import annotations  # Python 3.10 type hints
 
-from copy import deepcopy
 import numpy as np
 from scipy import interpolate
 from stable_baselines3 import PPO
@@ -87,18 +86,22 @@ class Controller(BaseController):
         # REPLACE THIS (START) ##
         #########################
         self.iter_counter = 0
-        assert X_GOAL is not None and waypoints is not None, "X_GOAL and waypoints must be provided"
-        # self.agent = PPO.load("./models/ppo_lvl2_7s_iter2/rl_model_65536_steps.zip")
+        ## Provide the waypoints and the goal only for drawing in the PyBullet.
+        assert (
+            X_GOAL is not None and waypoints is not None
+        ), "X_GOAL and waypoints must be provided"
+        ## Load the trained model
         self.agent = PPO.load("./models/ppo_lvl1_5sgate_iter4.zip")
+        ## Learned action scale is encoded in the action space of the agent
         self.las = self.agent.action_space.high[0]
         self.fas = 1 - self.las
-        print(f'LAS: {self.las}')
+        print(f"LAS: {self.las}")
         self.action_scale = np.array([1, 1, 1])
         self.X_GOAL = X_GOAL
         self.waypoints = waypoints
         self.RL = True
         self.ref_x = self.X_GOAL[:, 0]
-        self.ref_y = self.X_GOAL[:, 1]  
+        self.ref_y = self.X_GOAL[:, 1]
         self.ref_z = self.X_GOAL[:, 2]
         # Example: Hard-code waypoints through the gates. Obviously this is a crude way of
         # completing the challenge that is highly susceptible to noise and does not generalize at
@@ -106,10 +109,12 @@ class Controller(BaseController):
         self._take_off = False
         self._setpoint_land = False
         self._land = False
-        
+
         if self.VERBOSE:
             # Draw the trajectory on PyBullet's GUI.
-            draw_trajectory(initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z)
+            draw_trajectory(
+                initial_info, self.waypoints, self.ref_x, self.ref_y, self.ref_z
+            )
 
         #########################
         # REPLACE THIS (END) ####
@@ -155,31 +160,43 @@ class Controller(BaseController):
             args = [TAKEOFF_HEIGHT, TAKEOFF_DURATION]  # Height, duration
             self._take_off = True  # Only send takeoff command once
         else:
-            step = iteration - TAKEOFF_DURATION * self.CTRL_FREQ  # Account for 2s delay due to takeoff
+            step = (
+                iteration - TAKEOFF_DURATION * self.CTRL_FREQ
+            )  # Account for 2s delay due to takeoff
             if ep_time - TAKEOFF_DURATION > 0 and step < len(self.ref_x):
                 command_type = Command.FULLSTATE
-                self.iter_counter += 1 # Only for debugging
+                self.iter_counter += 1  # Only for debugging
                 action, _states = self.agent.predict(observation=obs)
                 action = self.action_scale * action
                 # Adding the first point in the horizon
                 pos = self.action_scale * obs[12:15]
-                if self.RL and False:
-                    pos = (self.las*obs[:3] + action[:3]) + self.fas*pos
-                else:
-                    # pos = self.action_scale*self.X_GOAL[step]
-                    pos = pos
-                # yaw = np.arctan2(-(pos[1]-obs[1]), (pos[0]-obs[0]))
+                pos = (self.las * obs[:3] + action[:3]) + self.fas * pos
                 yaw = 0.0
                 args = [pos, np.zeros(3), np.zeros(3), yaw, np.zeros(3), ep_time]
-            elif step >= len(self.ref_x) and not self._setpoint_land and info["task_completed"] == False:
-                print("Task not completed but reached the end of the path ins teps, continue to last reference point")
-                target_pos = self.action_scale*np.array([self.ref_x[-1], self.ref_y[-1], self.ref_z[-1]])
+            elif (
+                step >= len(self.ref_x)
+                and not self._setpoint_land
+                and info["task_completed"] == False
+            ):
+                print(
+                    "Task not completed but reached the end of the path ins teps, continue to last reference point"
+                )
+                target_pos = self.action_scale * np.array(
+                    [self.ref_x[-1], self.ref_y[-1], self.ref_z[-1]]
+                )
                 target_vel = np.zeros(3)
                 target_acc = np.zeros(3)
                 target_yaw = 0.0
                 target_rpy_rates = np.zeros(3)
                 command_type = Command.FULLSTATE
-                args = [target_pos, target_vel, target_acc, target_yaw, target_rpy_rates, ep_time]
+                args = [
+                    target_pos,
+                    target_vel,
+                    target_acc,
+                    target_yaw,
+                    target_rpy_rates,
+                    ep_time,
+                ]
             # Notify set point stop has to be called every time we transition from low-level
             # commands to high-level ones. Prepares for landing
             elif step >= len(self.ref_x) and not self._setpoint_land:

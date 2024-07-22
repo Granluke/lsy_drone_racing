@@ -26,7 +26,6 @@ from lsy_drone_racing.command import apply_sim_command
 from lsy_drone_racing.constants import FIRMWARE_FREQ
 from lsy_drone_racing.utils import load_config, load_controller
 from lsy_drone_racing.wrapper import DroneRacingObservationWrapper
-from lsy_drone_racing.create_waypoints import create_waypoints
 
 if TYPE_CHECKING:
     from munch import Munch
