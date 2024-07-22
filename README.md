@@ -29,11 +29,15 @@
 This branch is created to use PID to follow the path and complete the task. The sim and kaggle script is adjusted to take this controller automatically.
 
 The main controller is located in: 
-- [own_path_controller.py](./lsy_drone_racing/examples/own_path_controller.py)
+- [own_path_controller.py](./examples/own_path_controller.py)
 
 The Path planning and PID controller is located in:
 - [path_planning.py](./lsy_drone_racing/path_planning/path_planning.py)
 - [pid_controller.py](./lsy_drone_racing/path_planning/pid_controller.py)
+
+The Branch containing the RL controller is located under the following link:
+<a href="https://github.com/Granluke/lsy_drone_racing/tree/SideBranch_RL_based_Shared_Control?tab=readme-ov-file"> RL Controller Branch</a>
+
 
 
 
