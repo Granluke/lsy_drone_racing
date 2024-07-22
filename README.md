@@ -21,7 +21,7 @@ For training, we created training configurations under ./config/ to spawn the dr
 You can change the model you prefer to use in the simulation in the ./examples/controller.py
 
 For models we prefer different parameters,
-1. ppo_lvl1_5sgate_reward.zip: Change the duration between 4.5s-6s. We prefer to have buffer=0.2 or 0.3
+1. ppo_lvl1_5sgate_reward.zip: Change the duration between 4.5s-6s. We prefer to have buffer=0.4
 2. ppo_lvl2_5_5sgate_reward.zip: Change the duration to 5.8s to 6s. We prefer to have buffer=0.2 or 0.3
 3. ppo_lvl1_6s_traj_reward.zip: As we stated, it is unsuccesfull, it is just kept to make our case.
 
