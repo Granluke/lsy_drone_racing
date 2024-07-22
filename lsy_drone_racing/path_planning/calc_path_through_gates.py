@@ -52,7 +52,7 @@ def create_cylinder(x, y, z, height, radius):
 
 def create_waypoints(gates, start_point):
     waypoints = [start_point]
-    buffer = 0.2
+    buffer = 0.4
     before_after_points = []
     go_around_points = []
     intersection_points = []

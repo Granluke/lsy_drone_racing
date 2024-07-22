@@ -41,7 +41,7 @@ def create_race_env(config_path: Path, gui: bool = False, random_train=False) ->
         DroneRacingWrapper: The drone racing environment.
     """
     # Create the drone racing environment
-    # Load configuration and check if firmare should be used.
+    # Load configuration and check if firmare should be used
     config = load_config(config_path)
     # Overwrite config options
     config.quadrotor_config.gui = gui
