@@ -1,6 +1,7 @@
 import numpy as np
 import csv
 
+
 class PIDController:
     def __init__(self):
         self.Kp = np.array([0.3, 0.3, 0])
@@ -11,10 +12,21 @@ class PIDController:
         self.previous_error = np.zeros(3)
         self.csv_filename = "target_vs_control.csv"
 
-        with open(self.csv_filename, mode='w', newline='') as file:
+        with open(self.csv_filename, mode="w", newline="") as file:
             writer = csv.writer(file)
-            writer.writerow(['Target X', 'Target Y', 'Target Z', 'Control X', 'Control Y', 'Control Z', 'Actual position X', 'Actual position Y', 'Actual position Z'])
-
+            writer.writerow(
+                [
+                    "Target X",
+                    "Target Y",
+                    "Target Z",
+                    "Control X",
+                    "Control Y",
+                    "Control Z",
+                    "Actual position X",
+                    "Actual position Y",
+                    "Actual position Z",
+                ]
+            )
 
     def compute_control(self, target_pos, obs):
         # Extract the current position from obs
@@ -48,12 +60,10 @@ class PIDController:
         # Append target position and control output to CSV
         self.append_to_csv(target_pos, new_target_pos, current_pos)
 
-        
-
         return new_target_pos
-    
+
     def append_to_csv(self, target_pos, control_output, current_pos):
-        with open(self.csv_filename, mode='a', newline='') as file:
+        with open(self.csv_filename, mode="a", newline="") as file:
             writer = csv.writer(file)
             row = list(target_pos) + list(control_output) + list(current_pos)
             writer.writerow(row)
