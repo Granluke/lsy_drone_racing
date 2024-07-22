@@ -13,6 +13,7 @@ import logging
 import time
 from functools import partial
 from pathlib import Path
+import math
 
 import fire
 import numpy as np
@@ -30,8 +31,8 @@ logger = logging.getLogger(__name__)
 
 def simulate(
     config: str = "config/getting_started.yaml",
-    controller: str = "examples/controller.py",
-    n_runs: int = 1,
+    controller: str = "examples/own_path_controller.py",
+    n_runs: int = 10,
     gui: bool = True,
     terminate_on_lap: bool = True,
 ) -> list[float]:
@@ -83,6 +84,7 @@ def simulate(
         "gates_passed": 0,
     }
     ep_times = []
+    max_speeds = []
 
     # Run the episodes.
     for _ in range(n_runs):
@@ -94,6 +96,7 @@ def simulate(
         info["ctrl_timestep"] = CTRL_DT
         info["ctrl_freq"] = CTRL_FREQ
         lap_finished = False
+        max_speed = 0
         # obs = [x, x_dot, y, y_dot, z, z_dot, phi, theta, psi, p, q, r]
         vicon_obs = [obs[0], 0, obs[2], 0, obs[4], 0, obs[6], obs[7], obs[8], 0, 0, 0]
         ctrl = ctrl_class(vicon_obs, info, verbose=config.verbose)
@@ -115,6 +118,11 @@ def simulate(
 
             # Get the observation from the motion capture system
             vicon_obs = [obs[0], 0, obs[2], 0, obs[4], 0, obs[6], obs[7], obs[8], 0, 0, 0]
+            # calculate speed
+            speed = math.sqrt(obs[1]**2 + obs[3]**2 + obs[5]**2)
+            if speed > max_speed:
+                max_speed = speed 
+            stats["max_speed"] = max_speed
             # Compute control input.
             command_type, args = ctrl.compute_control(curr_time, vicon_obs, reward, done, info)
             # Apply the control input to the drone. This is a deviation from the gym API as the
@@ -150,6 +158,7 @@ def simulate(
         stats["collision_objects"] = set()
         stats["violations"] = 0
         ep_times.append(curr_time if info["current_target_gate_id"] == -1 else None)
+        max_speeds.append(max_speed)
 
     # Close the environment
     env.close()
@@ -177,6 +186,7 @@ def log_episode_stats(stats: dict, info: dict, config: Munch, curr_time: float, 
             f"Total reward: {stats['ep_reward']}\n"
             f"Number of collisions: {stats['collisions']}\n"
             f"Number of constraint violations: {stats['violations']}\n"
+            f"Max speed: {stats['max_speed']}\n"
         )
     )
 
