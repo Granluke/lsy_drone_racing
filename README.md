@@ -2,10 +2,26 @@
 ![ADR Banner](docs/img/banner.jpeg)
 <sub><sup>AI generated image</sup></sub>
 
+
+## Branch Info
+
+This branch is created to use PID to follow the path and complete the task. The sim and kaggle script is adjusted to take this controller automatically.
+
+The main controller is located in: 
+- [own_path_controller.py](./examples/own_path_controller.py)
+
+The Path planning and PID controller is located in:
+- [path_planning.py](./lsy_drone_racing/path_planning/path_planning.py)
+- [pid_controller.py](./lsy_drone_racing/path_planning/pid_controller.py)
+
+The Branch containing the RL controller is located under the following link:
+<a href="https://github.com/Granluke/lsy_drone_racing/tree/SideBranch_RL_based_Shared_Control?tab=readme-ov-file"> RL Controller Branch</a>
+
+
 ## Table of Contents
 - [Autonomous Drone Racing Project Course](#autonomous-drone-racing-project-course)
-  - [Table of Contents](#table-of-contents)
   - [Branch Info](#branch-info)
+  - [Table of Contents](#table-of-contents)
   - [Installation](#installation)
     - [Fork lsy\_drone\_racing](#fork-lsy_drone_racing)
     - [Using conda/mamba](#using-condamamba)
@@ -23,23 +39,6 @@
     - [Fly with the drones](#fly-with-the-drones)
       - [Settings](#settings)
       - [Launch](#launch)
-
-## Branch Info
-
-This branch is created to use PID to follow the path and complete the task. The sim and kaggle script is adjusted to take this controller automatically.
-
-The main controller is located in: 
-- [own_path_controller.py](./examples/own_path_controller.py)
-
-The Path planning and PID controller is located in:
-- [path_planning.py](./lsy_drone_racing/path_planning/path_planning.py)
-- [pid_controller.py](./lsy_drone_racing/path_planning/pid_controller.py)
-
-The Branch containing the RL controller is located under the following link:
-<a href="https://github.com/Granluke/lsy_drone_racing/tree/SideBranch_RL_based_Shared_Control?tab=readme-ov-file"> RL Controller Branch</a>
-
-
-
 
 
 ## Installation
